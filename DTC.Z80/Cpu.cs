@@ -16,14 +16,16 @@ namespace DTC.Z80;
 public sealed class Cpu
 {
     public Registers Reg { get; } = new Registers();
-    public Bus Bus { get; }
+    public Registers TheRegisters => Reg;
+    public Memory MainMemory { get; }
 
     public bool IsHalted { get; private set; }
     public long TStates { get; private set; }
+    public long TStatesSinceCpuStart => TStates;
 
-    public Cpu(Bus bus)
+    public Cpu(Memory memory)
     {
-        Bus = bus ?? throw new ArgumentNullException(nameof(bus));
+        MainMemory = memory ?? throw new ArgumentNullException(nameof(memory));
     }
 
     public void Reset()
@@ -47,7 +49,7 @@ public sealed class Cpu
 
     private byte Fetch8()
     {
-        var value = Bus.Read8(Reg.PC);
+        var value = MainMemory.Read8(Reg.PC);
         Reg.PC++;
         return value;
     }

@@ -92,6 +92,9 @@ public sealed class Registers
 
     public byte I { get; set; }
     public byte R { get; set; }
+    public bool IFF1 { get; set; }
+    public bool IFF2 { get; set; }
+    public byte IM { get; set; }
 
     public byte IXH
     {
@@ -174,5 +177,7 @@ public sealed class Registers
         m_alt = new RegisterSet();
         IX = IY = SP = PC = 0;
         I = R = 0;
+        IFF1 = IFF2 = false;
+        IM = 0;
     }
 }

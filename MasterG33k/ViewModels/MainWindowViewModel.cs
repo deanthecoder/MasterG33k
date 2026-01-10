@@ -100,7 +100,6 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         Display = CreateBlackDisplay();
         Settings.PropertyChanged += OnSettingsPropertyChanged;
         IsCpuHistoryTracked = Settings.IsCpuHistoryTracked;
-        ;
     }
 
     public void ToggleAmbientBlur()
