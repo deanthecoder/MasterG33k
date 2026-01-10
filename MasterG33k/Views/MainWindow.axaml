@@ -1,0 +1,213 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:viewModels="clr-namespace:MasterG33k.ViewModels"
+        xmlns:dialogHostAvalonia="clr-namespace:DialogHostAvalonia;assembly=DialogHost.Avalonia"
+        xmlns:views="clr-namespace:MasterG33k.Views"
+        xmlns:converters="clr-namespace:MasterG33k.Converters"
+        xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="MasterG33k.Views.MainWindow"
+        x:DataType="viewModels:MainWindowViewModel"
+        Width="1066" Height="768"
+        MinWidth="520" MinHeight="320"
+        Icon="/Assets/app.ico"
+        DragDrop.AllowDrop="True"
+        Title="{Binding WindowTitle}">
+    <Design.DataContext>
+        <viewModels:MainWindowViewModel />
+    </Design.DataContext>
+
+    <Window.Resources>
+        <converters:RomFileToNameConverter x:Key="RomFileToNameConverter" />
+    </Window.Resources>
+    
+    <Window.Styles>
+        <Style Selector="Button">
+            <Setter Property="Focusable" Value="False"/>
+        </Style>
+        <Style Selector="Image">
+            <Setter Property="IsHitTestVisible" Value="False"/>
+        </Style>
+    </Window.Styles>
+
+    <dialogHostAvalonia:DialogHost x:Name="Host" OverlayBackground="Black">
+        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,*">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                <Menu>
+                    <MenuItem Header="_File">
+                        <MenuItem Header="_Open..." Command="{Binding LoadGameRom}"
+                                  InputGesture="{OnPlatform 'ctrl+o', macOS='⌘+o'}"
+                                  IsEnabled="False" />
+                        <MenuItem Header="Open _Recent" IsEnabled="False">
+                            <MenuItem Header="Empty" IsVisible="{Binding Mru.IsEmpty}" IsEnabled="False"/>
+                            <MenuItem Header="{Binding Mru.Item1, Converter={StaticResource RomFileToNameConverter}}" ToolTip.Tip="{Binding Mru.Item1.FullName}" IsVisible="{Binding Mru.Item1.IsUsed}" Command="{Binding Mru.Open}" CommandParameter="1"/>
+                            <MenuItem Header="{Binding Mru.Item2, Converter={StaticResource RomFileToNameConverter}}" ToolTip.Tip="{Binding Mru.Item2.FullName}" IsVisible="{Binding Mru.Item2.IsUsed}" Command="{Binding Mru.Open}" CommandParameter="2"/>
+                            <MenuItem Header="{Binding Mru.Item3, Converter={StaticResource RomFileToNameConverter}}" ToolTip.Tip="{Binding Mru.Item3.FullName}" IsVisible="{Binding Mru.Item3.IsUsed}" Command="{Binding Mru.Open}" CommandParameter="3"/>
+                            <MenuItem Header="{Binding Mru.Item4, Converter={StaticResource RomFileToNameConverter}}" ToolTip.Tip="{Binding Mru.Item4.FullName}" IsVisible="{Binding Mru.Item4.IsUsed}" Command="{Binding Mru.Open}" CommandParameter="4"/>
+                            <MenuItem Header="{Binding Mru.Item5, Converter={StaticResource RomFileToNameConverter}}" ToolTip.Tip="{Binding Mru.Item5.FullName}" IsVisible="{Binding Mru.Item5.IsUsed}" Command="{Binding Mru.Open}" CommandParameter="5"/>
+                            <MenuItem Header="{Binding Mru.Item6, Converter={StaticResource RomFileToNameConverter}}" ToolTip.Tip="{Binding Mru.Item6.FullName}" IsVisible="{Binding Mru.Item6.IsUsed}" Command="{Binding Mru.Open}" CommandParameter="6"/>
+                            <MenuItem Header="{Binding Mru.Item7, Converter={StaticResource RomFileToNameConverter}}" ToolTip.Tip="{Binding Mru.Item7.FullName}" IsVisible="{Binding Mru.Item7.IsUsed}" Command="{Binding Mru.Open}" CommandParameter="7"/>
+                            <MenuItem Header="{Binding Mru.Item8, Converter={StaticResource RomFileToNameConverter}}" ToolTip.Tip="{Binding Mru.Item8.FullName}" IsVisible="{Binding Mru.Item8.IsUsed}" Command="{Binding Mru.Open}" CommandParameter="8"/>
+                            <Separator/>
+                            <MenuItem Header="Clear" Command="{Binding Mru.Clear}"/>
+                        </MenuItem>
+                        <MenuItem Header="_Save Snapshot..." Command="{Binding SaveSnapshot}"
+                                  InputGesture="{OnPlatform 'ctrl+s', macOS='⌘+s'}"
+                                  IsEnabled="False" />
+                        <MenuItem Header="E_xport" IsEnabled="False">
+                            <MenuItem Header="Save _Screenshot..." Command="{Binding SaveScreenshot}" />
+                            <MenuItem Header="Export _TileMap..." Command="{Binding ExportTileMap}" />
+                        </MenuItem>
+                        <MenuItem Header="Start _Recording" Command="{Binding StartRecording}"
+                                  InputGesture="{OnPlatform 'ctrl+m', macOS='⌘+m'}"
+                                  IsVisible="{Binding !IsRecording}"
+                                  IsEnabled="False" />
+                        <MenuItem Header="Stop _Recording..." Command="{Binding StopRecording}"
+                                  InputGesture="{OnPlatform 'ctrl+m', macOS='⌘+m'}"
+                                  IsVisible="{Binding IsRecording}"
+                                  IsEnabled="False" />
+                        <Separator />
+                        <MenuItem Header="_Exit" Command="{Binding CloseCommand}" />
+                    </MenuItem>
+
+                    <MenuItem Header="_Emulation">
+                        <MenuItem Header="_Reset Console" Command="{Binding ResetDevice}"
+                                  InputGesture="{OnPlatform 'ctrl+r', macOS='⌘+r'}"
+                                  IsEnabled="False" />
+                    </MenuItem>
+
+                    <MenuItem Header="_Display">
+                        <MenuItem Header="Ambient Blur" Command="{Binding ToggleAmbientBlur}">
+                            <MenuItem.Effect>
+                                <BlurEffect Radius="2"/>
+                            </MenuItem.Effect>
+                            <MenuItem.Icon>
+                                <avalonia:MaterialIcon Kind="Tick" IsVisible="{Binding Settings.IsAmbientBlurred}" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <Separator />
+                        <MenuItem Header="_Layers">
+                            <MenuItem Header="_Background" Command="{Binding ToggleBackgroundVisibility}"
+                                      IsEnabled="False">
+                                <MenuItem.Icon>
+                                    <avalonia:MaterialIcon Kind="Tick" IsVisible="{Binding Settings.IsBackgroundVisible}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="_Sprites" Command="{Binding ToggleSpriteVisibility}"
+                                      IsEnabled="False">
+                                <MenuItem.Icon>
+                                    <avalonia:MaterialIcon Kind="Tick" IsVisible="{Binding Settings.AreSpritesVisible}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                        </MenuItem>
+                    </MenuItem>
+
+                    <MenuItem Header="_Sound">
+                        <MenuItem Header="Channel 1 (Tone)" Command="{Binding ToggleSoundChannel1}"
+                                  IsEnabled="False">
+                            <MenuItem.Icon>
+                                <avalonia:MaterialIcon Kind="Tick" IsVisible="{Binding IsSoundChannel1Enabled}" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="Channel 2 (Tone)" Command="{Binding ToggleSoundChannel2}"
+                                  IsEnabled="False">
+                            <MenuItem.Icon>
+                                <avalonia:MaterialIcon Kind="Tick" IsVisible="{Binding IsSoundChannel2Enabled}" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="Channel 3 (Tone)" Command="{Binding ToggleSoundChannel3}"
+                                  IsEnabled="False">
+                            <MenuItem.Icon>
+                                <avalonia:MaterialIcon Kind="Tick" IsVisible="{Binding IsSoundChannel3Enabled}" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="Channel 4 (Noise)" Command="{Binding ToggleSoundChannel4}"
+                                  IsEnabled="False">
+                            <MenuItem.Icon>
+                                <avalonia:MaterialIcon Kind="Tick" IsVisible="{Binding IsSoundChannel4Enabled}" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                    </MenuItem>
+
+                    <MenuItem Header="_Debug" IsVisible="{Binding IsDebugBuild}" IsEnabled="False">
+                        <MenuItem Header="Track CPU History" Command="{Binding TrackCpuHistory}">
+                            <MenuItem.Icon>
+                                <avalonia:MaterialIcon Kind="Tick" IsVisible="{Binding IsCpuHistoryTracked}" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="Dump CPU History" Command="{Binding DumpCpuHistory}" IsEnabled="{Binding IsCpuHistoryTracked}" />
+                        <Separator />
+                        <MenuItem Header="Report CPU Clock Ticks" Command="{Binding ReportCpuClockTicks}" />
+                    </MenuItem>
+
+                    <MenuItem Header="_Help">
+                        <MenuItem Header="_Open Project Page..." Command="{Binding OpenProjectPage}" />
+                        <MenuItem Header="_Open Log..." Command="{Binding OpenLog}" />
+                        <MenuItem Header="_About..."
+                                  Command="{Binding OpenDialogCommand, ElementName=Host}">
+                            <MenuItem.CommandParameter>
+                                <views:AboutDialogContent PointerPressed="OnAboutDialogClicked" />
+                            </MenuItem.CommandParameter>
+                        </MenuItem>
+                    </MenuItem>
+                </Menu>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <StackPanel.Styles>
+                        <Style Selector="TextBlock">
+                            <Setter Property="FontWeight" Value="Normal"/>
+                        </Style>
+                    </StackPanel.Styles>
+                    
+                    <ToggleButton IsChecked="{Binding Settings.IsSoundEnabled}"
+                                  ToolTip.Tip="Sound (not yet implemented)"
+                                  IsEnabled="False">
+                        <avalonia:MaterialIcon Width="24" Height="24"
+                                               Tag="{Binding IsChecked, RelativeSource={RelativeSource AncestorType=ToggleButton}}">
+                            <avalonia:MaterialIcon.Styles>
+                                <Style Selector="avalonia|MaterialIcon[Tag=True]">
+                                    <Setter Property="Kind" Value="VolumeHigh" />
+                                </Style>
+                                <Style Selector="avalonia|MaterialIcon[Tag=False]">
+                                    <Setter Property="Kind" Value="VolumeOff" />
+                                </Style>
+                            </avalonia:MaterialIcon.Styles>
+                        </avalonia:MaterialIcon>
+                    </ToggleButton>
+
+                    <Button Command="{Binding OpenDialogCommand, ElementName=Host}"
+                            Theme="{DynamicResource MaterialFlatButton}"
+                            ToolTip.Tip="Rollback (not yet implemented)"
+                            IsEnabled="False">
+                        <Viewbox Width="24" Height="24">
+                            <Path Fill="White">
+                                <Path.Data>
+                                    <PathGeometry Figures="m 28.574462 0.35094201 c -7.6 1.09999999 -13.1 3.99999999 -18.7000001 9.59999999 -5.8 5.8 -8.5 11.1 -9.60000002 19.5 -1.79999998 13 5.40000002 26.8 17.30000012 33.1 11.3 6 24.9 5 35.2 -2.5 l 2.4 -1.8 9.1 8.3 c 5 4.6 10.5 9.6 12.2 11.2 2.3 2.2 3.2 3.3 3.5 5 0.6 2.5 2.5 5.4 4.1 5.8 1 0.3 1 0.8 1 11.899998 v 11.6 l -3.2 0.7 c -4.4 0.8 -10.9 4 -14.6 7 -9.2 7.5 -13.6 20.4 -11.1 32.3 3.1 14.9 17.1 26.3 32.5 26.3 12.299998 0 24.199998 -7.3 29.599998 -18.2 3.6 -7.3 4.5 -14 2.9 -21.7 -2.7 -12.8 -12.1 -22.5 -25.099998 -25.5 l -3.7 -0.9 v -11.2 -11.399998 l 1.6 -1.1 c 2 -1.5 3.2 -3.3 3.8 -6 0.5 -1.9 1.9 -3.4 12.499998 -13.2 l 11.9 -11 2.4 1.8 c 6 4.3 12.4 6.4 19.6 6.4 18.4 0 33.1 -14.6 33.1 -33 0 -9.1 -3.1 -16.7 -9.5 -23.2 -4.3 -4.3 -7.2 -6.2 -12.4 -8.1 -15.7 -5.7 -33.4 1.4 -40.7 16.2 -3 6.1 -3.7 9.8 -3.5 16.4 0.3 6.1 1.5 10.4 4.3 15.2 l 1.7 2.9 -11.2 10.3 -11.299998 10.4 -2.1 -0.9 c -2.7 -1.2 -5.3 -1.2 -7.7 0.1 l -2 1 -11.4 -10.6 -11.4 -10.4 1.1 -1.6 c 6.1 -9.3 6.8 -22.6 1.6 -32.9 -6.3 -12.4 -20.6 -19.9 -34.2 -17.79999999 z m 13.8 8.69999999 c 14.4 5.5 20.8 22.2 13.8 36 l -1.4 2.6 -3 -2.5 c -5.6 -4.9 -5.5 -4.6 -4.5 -8.4 0.7 -2.7 0.7 -3.8 0.3 -6.1 -1.5 -7.5 -8.2 -12.6 -15.7 -11.9 -5.2 0.5 -9.4 3.3 -11.8 7.9 -4.6 9 0.8 19.6 10.9 21.2 3.3 0.6 4.6 0.3 9.8 -1.8 0.5 -0.2 2.2 1 4.9 3.4 l 4.1 3.8 -2.7 1.7 c -3.8 2.4 -7.6 3.7 -11.9 4.1 -15.1 1 -27.7000001 -10.6 -27.7000001 -25.9 0 -5.1 0.6 -7.6 3.0000001 -12.2 3.6 -7 11.7 -12.6 19.2 -13.3 4.5 -0.5 9.1 0.1 12.7 1.4 z m 106.799998 -1.2 c 1.4 0.2 4.3 1.2 6.5 2.3 5.3 2.7 9.3 6.8 12 12.3 1.7 3.7 1.9 4.5 2.1 9.4 0.2 4.3 0 6 -0.9 8.9 -3.3 10.7 -13.4 18.2 -24.6 18.3 -5.4 0 -11.7 -2 -15.5 -5.1 l -1.2 -0.9 4.2 -3.7 4.2 -3.8 2.2 1.1 c 3.2 1.7 8.6 1.7 12.1 -0.1 5.6 -2.7 8.9 -8.4 8.5 -14.3 -0.6 -7.4 -6 -13 -13.3 -13.6 -7.5 -0.7 -14.1 4.3 -15.7 11.7 -0.5 2.5 -0.5 3.5 0.3 6.3 1 3.8 1.2 3.4 -3.9 7.9 l -3.5 3.1 -1.2 -2.5 c -3 -5.8 -3.7 -12.5 -2.2 -18.6 2.7 -10.1 11.4 -17.7 22.1 -19 1.6 -0.2 3.4 -0.3 4.2 -0.2 0.5 0.1 2.2 0.3 3.6 0.5 z M 85.074462 125.05094 v 5.6 l -2.3 0.9 c -8.7 3.3 -11.5 15.8 -5.2 23.1 5.6 6.6 16.9 6.6 22.3 -0.1 3.599998 -4.4 4.499998 -10.7 2.099998 -15.7 -1.4 -3.1 -5.099998 -6.7 -7.699998 -7.5 l -1.9 -0.7 v -5.7 -5.7 l 1.7 0.4 c 12.599998 2.8 21.499998 14.5 20.399998 27.1 -1.2 15.7 -15.899998 26.7 -31.099998 23.5 -6.4 -1.4 -12.9 -5.8 -16.4 -11.3 -9.1 -14.2 -2.6 -33 13.3 -38.4 1.9 -0.6 3.8 -1.2 4.2 -1.2 0.4 0 0.6 1.5 0.6 5.7 z" FillRule="NonZero"/>
+                                </Path.Data>
+                            </Path>
+                        </Viewbox>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <Grid Grid.Row="1" Grid.Column="0" Background="Black">
+                <Image x:Name="AmbientDisplay"
+                       Source="{Binding Display}"
+                       Margin="-200,0"
+                       Stretch="UniformToFill"
+                       Opacity="0.6"
+                       IsVisible="{Binding Settings.IsAmbientBlurred}">
+                    <Image.Effect>
+                        <BlurEffect Radius="200" />
+                    </Image.Effect>
+                </Image>
+
+                <Image x:Name="MainDisplay"
+                       Source="{Binding Display}"
+                       Stretch="Uniform" />
+            </Grid>
+        </Grid>
+    </dialogHostAvalonia:DialogHost>
+</Window>
