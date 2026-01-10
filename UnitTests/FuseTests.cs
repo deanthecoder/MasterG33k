@@ -30,9 +30,21 @@ public class FuseTests : TestsBase
         var fuseResult = TheResults.First(o => o.TestId == fuseTest.TestId);
 
         var cpu = new Cpu(new Memory());
-        fuseTest.InitCpu(cpu);
-        Assert.That(fuseTest.Run(cpu, fuseResult.ExpectedPC), Is.True, "Test timed-out.");
+#if DEBUG
+        cpu.InstructionLogger.IsEnabled = true;
+#endif
+        try
+        {
+            fuseTest.InitCpu(cpu);
+            Assert.That(fuseTest.Run(cpu, fuseResult.ExpectedPC), Is.True, "Test timed-out.");
 
-        fuseResult.Verify(cpu);
+            fuseResult.Verify(cpu);
+        }
+        catch
+        {
+            if (cpu.InstructionLogger.IsEnabled)
+                cpu.InstructionLogger.DumpToConsole();
+            throw;
+        }
     }
 }

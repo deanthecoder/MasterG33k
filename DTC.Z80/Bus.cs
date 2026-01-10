@@ -15,29 +15,20 @@ namespace DTC.Z80;
 /// </summary>
 public sealed class Bus
 {
-    private readonly byte[] m_ram;
+    private readonly Memory m_memory;
 
-    public Bus(int size = 0x10000)
+    public Bus(Memory memory)
     {
-        if (size <= 0)
-            throw new ArgumentOutOfRangeException(nameof(size));
-        m_ram = new byte[size];
+        m_memory = memory ?? throw new ArgumentNullException(nameof(memory));
     }
 
-    public byte Read8(ushort address) => m_ram[address % m_ram.Length];
+    public byte Read8(ushort address) => m_memory.Read8(address);
 
-    public void Write8(ushort address, byte value) => m_ram[address % m_ram.Length] = value;
+    public void Write8(ushort address, byte value) => m_memory.Write8(address, value);
 
-    public ushort Read16(ushort address)
-    {
-        var lo = Read8(address);
-        var hi = Read8((ushort)(address + 1));
-        return (ushort)(hi << 8 | lo);
-    }
+    public ushort Read16(ushort address) => m_memory.Read16(address);
 
-    public void Write16(ushort address, ushort value)
-    {
-        Write8(address, (byte)(value & 0xFF));
-        Write8((ushort)(address + 1), (byte)(value >> 8));
-    }
+    public void Write16(ushort address, ushort value) => m_memory.Write16(address, value);
+
+    
 }

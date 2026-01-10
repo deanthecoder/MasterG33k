@@ -28,14 +28,16 @@ public sealed class Registers
 
     public struct RegisterSet
     {
-        public byte A { get; set; }
-        public byte F { get; set; }
-        public byte B { get; set; }
-        public byte C { get; set; }
-        public byte D { get; set; }
-        public byte E { get; set; }
-        public byte H { get; set; }
-        public byte L { get; set; }
+        // ReSharper disable InconsistentNaming
+        public byte A;
+        public byte F;
+        public byte B;
+        public byte C;
+        public byte D;
+        public byte E;
+        public byte H;
+        public byte L;
+        // ReSharper restore InconsistentNaming
 
         public ushort AF
         {
@@ -85,16 +87,57 @@ public sealed class Registers
 
     public ref RegisterSet Alt => ref m_alt;
 
+    public ref byte A => ref m_main.A;
+    public ref byte F => ref m_main.F;
+    public ref byte B => ref m_main.B;
+    public ref byte C => ref m_main.C;
+    public ref byte D => ref m_main.D;
+    public ref byte E => ref m_main.E;
+    public ref byte H => ref m_main.H;
+    public ref byte L => ref m_main.L;
+
+    public ushort AF
+    {
+        get => m_main.AF;
+        set => m_main.AF = value;
+    }
+
+    public ushort BC
+    {
+        get => m_main.BC;
+        set => m_main.BC = value;
+    }
+
+    public ushort DE
+    {
+        get => m_main.DE;
+        set => m_main.DE = value;
+    }
+
+    public ushort HL
+    {
+        get => m_main.HL;
+        set => m_main.HL = value;
+    }
+
     public ushort IX { get; set; }
     public ushort IY { get; set; }
     public ushort SP { get; set; }
     public ushort PC { get; set; }
 
+    /// <summary>Interrupt page address register.</summary>
     public byte I { get; set; }
+    /// <summary>Memory refresh register.</summary>
     public byte R { get; set; }
+    /// <summary>Interrupt flip-flop 1 (master interrupt enable).</summary>
     public bool IFF1 { get; set; }
+    /// <summary>Interrupt flip-flop 2 (saved master interrupt enable).</summary>
     public bool IFF2 { get; set; }
+    /// <summary>Interrupt mode (IM 0/1/2).</summary>
     public byte IM { get; set; }
+
+    public void IncrementR() =>
+        R = (byte)((R & 0x80) | ((R + 1) & 0x7F));
 
     public byte IXH
     {
@@ -167,6 +210,12 @@ public sealed class Registers
         get => (m_main.F & 0x01) != 0;
         set => m_main.F = SetFlag(m_main.F, CarryBit, value);
     }
+
+    public void SetHfForInc(byte value, byte inc = 1) =>
+        Hf = (value & 0x0F) + (inc & 0x0F) > 0x0F;
+
+    public void SetHfForDec(byte value, byte dec = 1) =>
+        Hf = (value & 0x0F) < (dec & 0x0F);
 
     private static byte SetFlag(byte flags, byte bit, bool value) =>
         value ? flags.SetBit(bit) : flags.ResetBit(bit);

@@ -15,22 +15,30 @@ namespace DTC.Z80;
 /// </summary>
 public sealed class Cpu
 {
-    public Registers Reg { get; } = new Registers();
-    public Registers TheRegisters => Reg;
+    public Registers Reg { get; }
+    public Registers TheRegisters { get; }
+    public InstructionLogger InstructionLogger { get; } = new();
     public Memory MainMemory { get; }
 
-    public bool IsHalted { get; private set; }
+    public bool IsHalted { get; set; }
+    // ReSharper disable InconsistentNaming
     public long TStates { get; private set; }
     public long TStatesSinceCpuStart => TStates;
+    // ReSharper restore InconsistentNaming
 
     public Cpu(Memory memory)
     {
         MainMemory = memory ?? throw new ArgumentNullException(nameof(memory));
+        TheRegisters = new Registers();
+        Reg = TheRegisters;
+        Bus = new Bus(MainMemory);
     }
+
+    public Bus Bus { get; }
 
     public void Reset()
     {
-        Reg.Clear();
+        TheRegisters.Clear();
         IsHalted = false;
         TStates = 0;
     }
@@ -39,25 +47,62 @@ public sealed class Cpu
     {
         if (IsHalted)
         {
-            TStates += 4;
+            TheRegisters.IncrementR();
+            InternalWaitM();
             return;
         }
 
-        var opcode = Fetch8();
-        Execute(opcode);
+        var pc = TheRegisters.PC;
+        var opcode = FetchOpcode8();
+        var instruction = Instructions.Instructions.Table[opcode];
+        if (InstructionLogger.IsEnabled)
+            InstructionLogger.Write(() => $"{pc:X4}: {opcode:X2} {instruction?.Mnemonic ?? "??"}");
+        instruction?.Execute(this);
     }
 
-    private byte Fetch8()
+    public byte Fetch8()
     {
-        var value = MainMemory.Read8(Reg.PC);
-        Reg.PC++;
+        var value = Read8(TheRegisters.PC);
+        TheRegisters.PC++;
         return value;
     }
 
-    private void Execute(byte opcode)
+    public byte FetchOpcode8()
     {
-        // Stub for future Z80 instruction decode/execute.
-        // For now, treat any opcode as a NOP.
+        TheRegisters.IncrementR();
+        return Fetch8();
+    }
+
+    public ushort Fetch16() =>
+        (ushort)(Fetch8() | (Fetch8() << 8));
+
+    public byte Read8(ushort address)
+    {
+        var value = MainMemory.Read8(address);
+        InternalWaitM();
+        return value;
+    }
+
+    public void Write8(ushort address, byte value)
+    {
+        MainMemory.Write8(address, value);
+        InternalWaitM();
+    }
+
+    public void Write16(ushort address, ushort value)
+    {
+        Write8(address, (byte)(value & 0xFF));
+        Write8((ushort)(address + 1), (byte)(value >> 8));
+    }
+
+    public void InternalWaitM() =>
         TStates += 4;
+
+
+    public void PushPC()
+    {
+        Write8((ushort)(Reg.SP - 1), (byte)(Reg.PC >> 8));
+        Write8((ushort)(Reg.SP - 2), (byte)(Reg.PC & 0xFF));
+        Reg.SP -= 2;
     }
 }

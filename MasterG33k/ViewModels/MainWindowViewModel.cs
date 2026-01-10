@@ -21,6 +21,7 @@ using Avalonia.Platform;
 using CSharp.Core;
 using CSharp.Core.Extensions;
 using CSharp.Core.ViewModels;
+using DTC.Z80;
 
 namespace MasterG33k.ViewModels;
 
@@ -32,6 +33,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool m_isSoundChannel3Enabled = true;
     private bool m_isSoundChannel4Enabled = true;
     private bool m_isCpuHistoryTracked;
+    private readonly Cpu m_cpu;
 
     public MruFiles Mru { get; }
     public IImage Display { get; }
@@ -89,6 +91,9 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             if (!SetField(ref m_isCpuHistoryTracked, value))
                 return;
             Settings.IsCpuHistoryTracked = value;
+#if DEBUG
+            m_cpu.InstructionLogger.IsEnabled = value;
+#endif
         }
     }
 
@@ -98,8 +103,12 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         Mru.OpenRequested += (_, file) => LoadRomFile(file, addToMru: false);
 
         Display = CreateBlackDisplay();
+        m_cpu = new Cpu(new Memory());
         Settings.PropertyChanged += OnSettingsPropertyChanged;
         IsCpuHistoryTracked = Settings.IsCpuHistoryTracked;
+#if DEBUG
+        m_cpu.InstructionLogger.IsEnabled = IsCpuHistoryTracked;
+#endif
     }
 
     public void ToggleAmbientBlur()
@@ -156,7 +165,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     public void ResetDevice() => Logger.Instance.Info("Reset is not implemented yet.");
 
-    public void DumpCpuHistory() => Logger.Instance.Info("CPU history is not implemented yet.");
+    public void DumpCpuHistory() =>
+        m_cpu.InstructionLogger.DumpToConsole();
 
     public void ReportCpuClockTicks() => Logger.Instance.Info("CPU clock ticks are not implemented yet.");
 
