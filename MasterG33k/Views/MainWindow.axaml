@@ -131,7 +131,7 @@
                         </MenuItem>
                     </MenuItem>
 
-                    <MenuItem Header="_Debug" IsVisible="{Binding IsDebugBuild}" IsEnabled="False">
+                    <MenuItem Header="_Debug" IsVisible="{Binding IsDebugBuild}">
                         <MenuItem Header="Track CPU History" Command="{Binding TrackCpuHistory}">
                             <MenuItem.Icon>
                                 <avalonia:MaterialIcon Kind="Tick" IsVisible="{Binding IsCpuHistoryTracked}" />

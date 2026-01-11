@@ -15,6 +15,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Threading;
 using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -36,6 +37,10 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool m_isSoundChannel4Enabled = true;
     private bool m_isCpuHistoryTracked;
     private readonly Cpu m_cpu;
+    private readonly object m_cpuStepLock = new();
+    private Thread m_cpuThread;
+    private bool m_shutdownRequested;
+    private readonly ClockSync m_clockSync;
 
     public MruFiles Mru { get; }
     public IImage Display { get; }
@@ -107,6 +112,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         Display = CreateBlackDisplay();
         m_cpu = new Cpu(new Bus(new Memory()));
+        m_clockSync = new ClockSync(GetEffectiveCpuHz, () => m_cpu.TStatesSinceCpuStart, () => m_cpu.Reset());
         Settings.PropertyChanged += OnSettingsPropertyChanged;
         IsCpuHistoryTracked = Settings.IsCpuHistoryTracked;
 #if DEBUG
@@ -166,11 +172,13 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             m_cpu.Bus.Attach(romDevice);
             m_cpu.Bus.Attach(new SmsMapperDevice(romDevice));
             LogRomInfo(biosFile, biosData, romDevice.BankCount);
+            StartCpuIfNeeded();
             return;
         }
 
         m_cpu.Bus.Attach(new BiosRomDevice(biosData));
         LogRomInfo(biosFile, biosData, bankCount: 1);
+        StartCpuIfNeeded();
     }
 
     private static void LogRomInfo(FileInfo romFile, byte[] romData, int bankCount)
@@ -255,8 +263,56 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
+        StopCpu();
         Settings.MruFiles = Mru.AsString();
         Settings.PropertyChanged -= OnSettingsPropertyChanged;
+    }
+
+    private void StartCpuIfNeeded()
+    {
+        if (m_cpuThread != null)
+            return;
+
+        m_shutdownRequested = false;
+        m_clockSync.Reset();
+        m_cpuThread = new Thread(RunCpuLoop)
+        {
+            Name = "MasterG33k CPU",
+            IsBackground = true
+        };
+        m_cpuThread.Start();
+    }
+
+    private void StopCpu()
+    {
+        if (m_cpuThread == null)
+            return;
+
+        m_shutdownRequested = true;
+        if (!m_cpuThread.Join(TimeSpan.FromSeconds(2)))
+            m_cpuThread.Interrupt();
+        m_cpuThread = null;
+    }
+
+    private void RunCpuLoop()
+    {
+        try
+        {
+            while (!m_shutdownRequested)
+            {
+                m_clockSync.SyncWithRealTime();
+                lock (m_cpuStepLock)
+                    m_cpu.Step();
+            }
+        }
+        catch (ThreadInterruptedException)
+        {
+            // Expected during shutdown.
+        }
+        catch (Exception e)
+        {
+            Logger.Instance.Error($"Stopping CPU loop due to exception: {e.Message}");
+        }
     }
 
     private static IImage CreateBlackDisplay()
@@ -275,4 +331,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         return bitmap;
     }
+
+    private static double GetEffectiveCpuHz() =>
+        // Master System NTSC CPU clock; we always render 256x192.
+        3_579_545;
 }
