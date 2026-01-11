@@ -9,11 +9,13 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.Platform.Storage;
 using CSharp.Core;
 using MasterG33k.ViewModels;
 
@@ -28,6 +30,8 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
+        AddHandler(DragDrop.DropEvent, OnDrop);
+        AddHandler(DragDrop.DragOverEvent, OnDragOver);
 
         Logger.Instance.Info("Application starting.");
     }
@@ -75,4 +79,40 @@ public partial class MainWindow : Window
 
     private static bool IsDirectionalKey(Key key) =>
         key is Key.Left or Key.Right or Key.Up or Key.Down;
+
+    private void OnDragOver(object sender, DragEventArgs e)
+    {
+        e.DragEffects = TryGetRomFile(e, out _) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void OnDrop(object sender, DragEventArgs e)
+    {
+        if (TryGetRomFile(e, out var romFile))
+            ViewModel.LoadRomFromFile(romFile, addToMru: true);
+    }
+
+    private static bool TryGetRomFile(DragEventArgs e, out FileInfo romFile)
+    {
+        romFile = null;
+
+        var files = e.Data.GetFiles();
+        if (files == null)
+            return false;
+
+        foreach (var file in files)
+        {
+            var path = file.TryGetLocalPath();
+            if (string.IsNullOrWhiteSpace(path) || !IsSupportedRom(path))
+                continue;
+            romFile = new FileInfo(path);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsSupportedRom(string path) =>
+        path.EndsWith(".sms", StringComparison.OrdinalIgnoreCase) ||
+        path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
 }

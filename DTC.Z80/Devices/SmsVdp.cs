@@ -8,6 +8,8 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using CSharp.Core.Image;
+
 namespace DTC.Z80.Devices;
 
 /// <summary>
@@ -296,6 +298,31 @@ public sealed class SmsVdp
     }
 
     public bool HasNonBlackPixelThisFrame => m_hasNonBlackPixelThisFrame;
+
+    /// <summary>
+    /// Dump the current frame buffer to disk (.tga).
+    /// </summary>
+    public void DumpFrame(FileInfo tgaFile)
+    {
+        if (tgaFile == null)
+            throw new ArgumentNullException(nameof(tgaFile));
+        var rgba = ConvertBgraToRgba(m_frameBuffer);
+        TgaWriter.Write(tgaFile, rgba, FrameWidth, FrameHeight, 4);
+    }
+
+    private static byte[] ConvertBgraToRgba(byte[] buffer)
+    {
+        var converted = new byte[buffer.Length];
+        for (var i = 0; i + 3 < buffer.Length; i += 4)
+        {
+            converted[i] = buffer[i + 2];
+            converted[i + 1] = buffer[i + 1];
+            converted[i + 2] = buffer[i];
+            converted[i + 3] = buffer[i + 3];
+        }
+
+        return converted;
+    }
 
     private int SelectNameTableBase()
     {

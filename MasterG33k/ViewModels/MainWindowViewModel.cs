@@ -12,6 +12,7 @@ using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -21,6 +22,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using CSharp.Core;
+using CSharp.Core.Commands;
 using CSharp.Core.Extensions;
 using CSharp.Core.UI;
 using CSharp.Core.ViewModels;
@@ -121,7 +123,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public MainWindowViewModel()
     {
         Mru = new MruFiles().InitFromString(Settings.MruFiles);
-        Mru.OpenRequested += (_, file) => LoadRomFile(file, addToMru: false);
+        Mru.OpenRequested += (_, file) => LoadRomFromFile(file, addToMru: false);
 
         m_display = CreateBlackDisplay();
         Display = m_display;
@@ -167,11 +169,23 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     public void StopRecording() => Logger.Instance.Info("Recording is not implemented yet.");
 
-    public void LoadGameRom() => Logger.Instance.Info("ROM loading is not implemented yet.");
+    public void LoadGameRom()
+    {
+        var command = new FileOpenCommand("Open ROM", "Master System ROMs", ["*.sms", "*.zip"]);
+        command.FileSelected += (_, info) => LoadRomFromFile(info, addToMru: true);
+        command.Execute(null);
+    }
 
     public void CloseCommand() => Application.Current.GetMainWindow().Close();
 
-    public void SaveScreenshot() => Logger.Instance.Info("Screenshot export is not implemented yet.");
+    public void SaveScreenshot()
+    {
+        var prefix = SanitizeFileName(m_currentRomTitle);
+        var defaultName = $"{prefix}.tga";
+        var command = new FileSaveCommand("Save Screenshot", "TGA Files", ["*.tga"], defaultName);
+        command.FileSelected += (_, info) => m_vdp.DumpFrame(info);
+        command.Execute(null);
+    }
 
     public void LoadBios(FileInfo biosFile)
     {
@@ -273,7 +287,10 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
-    internal void LoadRomFile(FileInfo romFile, bool addToMru = true)
+    internal void LoadRomFile(FileInfo romFile, bool addToMru = true) =>
+        LoadRomFromFile(romFile, addToMru);
+
+    internal void LoadRomFromFile(FileInfo romFile, bool addToMru)
     {
         if (romFile == null)
             return;
@@ -283,11 +300,36 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        var romData = ReadRomData(romFile, out var romName);
+        if (romData == null || romData.Length == 0)
+        {
+            Logger.Instance.Warn($"Unable to load ROM '{romFile.FullName}': No valid ROM data found.");
+            return;
+        }
+
+        StopCpu();
+
+        var romDevice = new SmsRomDevice(romData);
+        m_cpu.Bus.Attach(romDevice);
+        m_cpu.Bus.Attach(new SmsMapperDevice(romDevice));
+
+        lock (m_cpuStepLock)
+        {
+            Array.Clear(m_cpu.MainMemory.Data, 0, m_cpu.MainMemory.Data.Length);
+            m_cpu.Reset();
+            m_vdp.Reset();
+            m_clockSync.Reset();
+            m_lastCpuTStates = 0;
+            ResetDisplayScan();
+        }
+
         if (addToMru)
             Mru.Add(romFile);
 
-        m_currentRomTitle = romFile.Name;
+        m_currentRomTitle = romName;
         WindowTitle = $"MasterG33k - {m_currentRomTitle}";
+        StartCpuIfNeeded();
+        LogRomInfo(romFile, romData, romDevice.BankCount);
     }
 
     public void Dispose()
@@ -435,4 +477,33 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private static double GetEffectiveCpuHz() =>
         // Master System NTSC CPU clock; we always render 256x192.
         3_579_545;
+
+    private static string SanitizeFileName(string input) =>
+        string.IsNullOrWhiteSpace(input) ? "MasterG33k" : input.ToSafeFileName();
+
+    private static byte[] ReadRomData(FileInfo romFile, out string romName)
+    {
+        romName = romFile?.Name;
+        if (romFile == null)
+            return null;
+
+        if (!romFile.Extension.Equals(".zip", StringComparison.OrdinalIgnoreCase))
+            return romFile.ReadAllBytes();
+
+        using var archive = ZipFile.OpenRead(romFile.FullName);
+        foreach (var entry in archive.Entries)
+        {
+            if (!entry.Name.EndsWith(".sms", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var buffer = new byte[(int)entry.Length];
+            using var stream = entry.Open();
+            stream.ReadExactly(buffer.AsSpan());
+
+            romName = entry.Name;
+            return buffer;
+        }
+
+        return null;
+    }
 }

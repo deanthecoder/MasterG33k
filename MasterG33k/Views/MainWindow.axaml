@@ -33,6 +33,7 @@
     </Window.Styles>
 
     <Window.KeyBindings>
+        <KeyBinding Command="{Binding LoadGameRom}" Gesture="{OnPlatform 'ctrl+o', macOS='⌘+o'}" />
         <KeyBinding Command="{Binding ResetDevice}" Gesture="{OnPlatform 'ctrl+r', macOS='⌘+r'}" />
     </Window.KeyBindings>
 
@@ -42,9 +43,8 @@
                 <Menu>
                     <MenuItem Header="_File">
                         <MenuItem Header="_Open..." Command="{Binding LoadGameRom}"
-                                  InputGesture="{OnPlatform 'ctrl+o', macOS='⌘+o'}"
-                                  IsEnabled="False" />
-                        <MenuItem Header="Open _Recent" IsEnabled="False">
+                                  InputGesture="{OnPlatform 'ctrl+o', macOS='⌘+o'}" />
+                        <MenuItem Header="Open _Recent">
                             <MenuItem Header="Empty" IsVisible="{Binding Mru.IsEmpty}" IsEnabled="False"/>
                             <MenuItem Header="{Binding Mru.Item1, Converter={StaticResource RomFileToNameConverter}}" ToolTip.Tip="{Binding Mru.Item1.FullName}" IsVisible="{Binding Mru.Item1.IsUsed}" Command="{Binding Mru.Open}" CommandParameter="1"/>
                             <MenuItem Header="{Binding Mru.Item2, Converter={StaticResource RomFileToNameConverter}}" ToolTip.Tip="{Binding Mru.Item2.FullName}" IsVisible="{Binding Mru.Item2.IsUsed}" Command="{Binding Mru.Open}" CommandParameter="2"/>
@@ -60,9 +60,10 @@
                         <MenuItem Header="_Save Snapshot..." Command="{Binding SaveSnapshot}"
                                   InputGesture="{OnPlatform 'ctrl+s', macOS='⌘+s'}"
                                   IsEnabled="False" />
-                        <MenuItem Header="E_xport" IsEnabled="False">
+                        <MenuItem Header="E_xport">
                             <MenuItem Header="Save _Screenshot..." Command="{Binding SaveScreenshot}" />
-                            <MenuItem Header="Export _TileMap..." Command="{Binding ExportTileMap}" />
+                            <MenuItem Header="Export _TileMap..." Command="{Binding ExportTileMap}"
+                                      IsEnabled="False" />
                         </MenuItem>
                         <MenuItem Header="Start _Recording" Command="{Binding StartRecording}"
                                   InputGesture="{OnPlatform 'ctrl+m', macOS='⌘+m'}"
