@@ -23,94 +23,94 @@ public static class EdInstructions
         for (var i = 0; i < table.Length; i++)
             table[i] = new Instruction("NOP", static _ => { });
 
-        table[0x40] = new Instruction("IN B,(C)", static cpu => { DoIn(cpu, ref cpu.Reg.B); });
+        table[0x40] = new Instruction("IN B,(C)", static cpu => { DoIn(cpu, out cpu.Reg.B); });
         table[0x41] = new Instruction("OUT (C),B", static cpu => { DoOut(cpu, cpu.Reg.B); });
         table[0x42] = new Instruction("SBC HL,BC", static cpu => { DoSbcHl(cpu, cpu.Reg.BC); });
         table[0x43] = new Instruction("LD (nn),BC", static cpu => { StoreRegisterPair(cpu, cpu.Reg.BC); });
         table[0x44] = new Instruction("NEG", static cpu => { cpu.Reg.A = cpu.Alu.SubtractAndSetFlags((byte)0, cpu.Reg.A, subCf: false); });
-        table[0x45] = new Instruction("RETN", static cpu => { DoReti(cpu); });
+        table[0x45] = new Instruction("RETN", DoReti);
         table[0x46] = new Instruction("IM 0", static cpu => { cpu.Reg.IM = 0; });
         table[0x47] = new Instruction("LD I,A", static cpu => { cpu.Reg.I = cpu.Reg.A; cpu.InternalWait(1); });
-        table[0x48] = new Instruction("IN C,(C)", static cpu => { DoIn(cpu, ref cpu.Reg.C); });
+        table[0x48] = new Instruction("IN C,(C)", static cpu => { DoIn(cpu, out cpu.Reg.C); });
         table[0x49] = new Instruction("OUT (C),C", static cpu => { DoOut(cpu, cpu.Reg.C); });
         table[0x4A] = new Instruction("ADC HL,BC", static cpu => { DoAdcHl(cpu, cpu.Reg.BC); });
         table[0x4B] = new Instruction("LD BC,(nn)", static cpu => { cpu.Reg.BC = LoadRegisterPair(cpu); });
         table[0x4C] = new Instruction("NEG", static cpu => { cpu.Reg.A = cpu.Alu.SubtractAndSetFlags((byte)0, cpu.Reg.A, subCf: false); });
-        table[0x4D] = new Instruction("RETI", static cpu => { DoReti(cpu); });
+        table[0x4D] = new Instruction("RETI", DoReti);
         table[0x4E] = new Instruction("IM 0", static cpu => { cpu.Reg.IM = 0; });
         table[0x4F] = new Instruction("LD R,A", static cpu => { cpu.Reg.R = cpu.Reg.A; cpu.InternalWait(1); });
 
-        table[0x50] = new Instruction("IN D,(C)", static cpu => { DoIn(cpu, ref cpu.Reg.D); });
+        table[0x50] = new Instruction("IN D,(C)", static cpu => { DoIn(cpu, out cpu.Reg.D); });
         table[0x51] = new Instruction("OUT (C),D", static cpu => { DoOut(cpu, cpu.Reg.D); });
         table[0x52] = new Instruction("SBC HL,DE", static cpu => { DoSbcHl(cpu, cpu.Reg.DE); });
         table[0x53] = new Instruction("LD (nn),DE", static cpu => { StoreRegisterPair(cpu, cpu.Reg.DE); });
         table[0x54] = new Instruction("NEG", static cpu => { cpu.Reg.A = cpu.Alu.SubtractAndSetFlags((byte)0, cpu.Reg.A, subCf: false); });
-        table[0x55] = new Instruction("RETN", static cpu => { DoReti(cpu); });
+        table[0x55] = new Instruction("RETN", DoReti);
         table[0x56] = new Instruction("IM 1", static cpu => { cpu.Reg.IM = 1; });
         table[0x57] = new Instruction("LD A,I", static cpu => { LoadAFromInterruptRegister(cpu, cpu.Reg.I); });
-        table[0x58] = new Instruction("IN E,(C)", static cpu => { DoIn(cpu, ref cpu.Reg.E); });
+        table[0x58] = new Instruction("IN E,(C)", static cpu => { DoIn(cpu, out cpu.Reg.E); });
         table[0x59] = new Instruction("OUT (C),E", static cpu => { DoOut(cpu, cpu.Reg.E); });
         table[0x5A] = new Instruction("ADC HL,DE", static cpu => { DoAdcHl(cpu, cpu.Reg.DE); });
         table[0x5B] = new Instruction("LD DE,(nn)", static cpu => { cpu.Reg.DE = LoadRegisterPair(cpu); });
         table[0x5C] = new Instruction("NEG", static cpu => { cpu.Reg.A = cpu.Alu.SubtractAndSetFlags((byte)0, cpu.Reg.A, subCf: false); });
-        table[0x5D] = new Instruction("RETN", static cpu => { DoReti(cpu); });
+        table[0x5D] = new Instruction("RETN", DoReti);
         table[0x5E] = new Instruction("IM 2", static cpu => { cpu.Reg.IM = 2; });
         table[0x5F] = new Instruction("LD A,R", static cpu => { LoadAFromInterruptRegister(cpu, cpu.Reg.R); });
 
-        table[0x60] = new Instruction("IN H,(C)", static cpu => { DoIn(cpu, ref cpu.Reg.H); });
+        table[0x60] = new Instruction("IN H,(C)", static cpu => { DoIn(cpu, out cpu.Reg.H); });
         table[0x61] = new Instruction("OUT (C),H", static cpu => { DoOut(cpu, cpu.Reg.H); });
         table[0x62] = new Instruction("SBC HL,HL", static cpu => { DoSbcHl(cpu, cpu.Reg.HL); });
         table[0x63] = new Instruction("LD (nn),HL", static cpu => { StoreRegisterPair(cpu, cpu.Reg.HL); });
         table[0x64] = new Instruction("NEG", static cpu => { cpu.Reg.A = cpu.Alu.SubtractAndSetFlags((byte)0, cpu.Reg.A, subCf: false); });
-        table[0x65] = new Instruction("RETN", static cpu => { DoReti(cpu); });
+        table[0x65] = new Instruction("RETN", DoReti);
         table[0x66] = new Instruction("IM 0", static cpu => { cpu.Reg.IM = 0; });
-        table[0x67] = new Instruction("RRD", static cpu => { DoRrd(cpu); });
-        table[0x68] = new Instruction("IN L,(C)", static cpu => { DoIn(cpu, ref cpu.Reg.L); });
+        table[0x67] = new Instruction("RRD", DoRrd);
+        table[0x68] = new Instruction("IN L,(C)", static cpu => { DoIn(cpu, out cpu.Reg.L); });
         table[0x69] = new Instruction("OUT (C),L", static cpu => { DoOut(cpu, cpu.Reg.L); });
         table[0x6A] = new Instruction("ADC HL,HL", static cpu => { DoAdcHl(cpu, cpu.Reg.HL); });
         table[0x6B] = new Instruction("LD HL,(nn)", static cpu => { cpu.Reg.HL = LoadRegisterPair(cpu); });
         table[0x6C] = new Instruction("NEG", static cpu => { cpu.Reg.A = cpu.Alu.SubtractAndSetFlags((byte)0, cpu.Reg.A, subCf: false); });
-        table[0x6D] = new Instruction("RETN", static cpu => { DoReti(cpu); });
+        table[0x6D] = new Instruction("RETN", DoReti);
         table[0x6E] = new Instruction("IM 0", static cpu => { cpu.Reg.IM = 0; });
-        table[0x6F] = new Instruction("RLD", static cpu => { DoRld(cpu); });
+        table[0x6F] = new Instruction("RLD", DoRld);
 
-        table[0x70] = new Instruction("IN (C)", static cpu => { DoInDiscard(cpu); });
+        table[0x70] = new Instruction("IN (C)", DoInDiscard);
         table[0x71] = new Instruction("OUT (C),0", static cpu => { DoOut(cpu, 0); });
         table[0x72] = new Instruction("SBC HL,SP", static cpu => { DoSbcHl(cpu, cpu.Reg.SP); });
         table[0x73] = new Instruction("LD (nn),SP", static cpu => { StoreRegisterPair(cpu, cpu.Reg.SP); });
         table[0x74] = new Instruction("NEG", static cpu => { cpu.Reg.A = cpu.Alu.SubtractAndSetFlags((byte)0, cpu.Reg.A, subCf: false); });
-        table[0x75] = new Instruction("RETN", static cpu => { DoReti(cpu); });
+        table[0x75] = new Instruction("RETN", DoReti);
         table[0x76] = new Instruction("IM 1", static cpu => { cpu.Reg.IM = 1; });
-        table[0x78] = new Instruction("IN A,(C)", static cpu => { DoIn(cpu, ref cpu.Reg.A); });
+        table[0x78] = new Instruction("IN A,(C)", static cpu => { DoIn(cpu, out cpu.Reg.A); });
         table[0x79] = new Instruction("OUT (C),A", static cpu => { DoOut(cpu, cpu.Reg.A); });
         table[0x7A] = new Instruction("ADC HL,SP", static cpu => { DoAdcHl(cpu, cpu.Reg.SP); });
         table[0x7B] = new Instruction("LD SP,(nn)", static cpu => { cpu.Reg.SP = LoadRegisterPair(cpu); });
         table[0x7C] = new Instruction("NEG", static cpu => { cpu.Reg.A = cpu.Alu.SubtractAndSetFlags((byte)0, cpu.Reg.A, subCf: false); });
-        table[0x7D] = new Instruction("RETN", static cpu => { DoReti(cpu); });
+        table[0x7D] = new Instruction("RETN", DoReti);
         table[0x7E] = new Instruction("IM 2", static cpu => { cpu.Reg.IM = 2; });
 
-        table[0xA0] = new Instruction("LDI", static cpu => { DoLdi(cpu); });
-        table[0xA1] = new Instruction("CPI", static cpu => { DoCpi(cpu); });
+        table[0xA0] = new Instruction("LDI", DoLdi);
+        table[0xA1] = new Instruction("CPI", DoCpi);
         table[0xA2] = new Instruction("INI", static cpu => { DoIni(cpu, repeat: false); });
         table[0xA3] = new Instruction("OUTI", static cpu => { DoOuti(cpu, repeat: false); });
-        table[0xA8] = new Instruction("LDD", static cpu => { DoLdd(cpu); });
-        table[0xA9] = new Instruction("CPD", static cpu => { DoCpd(cpu); });
+        table[0xA8] = new Instruction("LDD", DoLdd);
+        table[0xA9] = new Instruction("CPD", DoCpd);
         table[0xAA] = new Instruction("IND", static cpu => { DoInd(cpu, repeat: false); });
         table[0xAB] = new Instruction("OUTD", static cpu => { DoOutd(cpu, repeat: false); });
 
-        table[0xB0] = new Instruction("LDIR", static cpu => { DoLdir(cpu); });
-        table[0xB1] = new Instruction("CPIR", static cpu => { DoCpir(cpu); });
+        table[0xB0] = new Instruction("LDIR", DoLdir);
+        table[0xB1] = new Instruction("CPIR", DoCpir);
         table[0xB2] = new Instruction("INIR", static cpu => { DoIni(cpu, repeat: true); });
         table[0xB3] = new Instruction("OTIR", static cpu => { DoOuti(cpu, repeat: true); });
-        table[0xB8] = new Instruction("LDDR", static cpu => { DoLddr(cpu); });
-        table[0xB9] = new Instruction("CPDR", static cpu => { DoCpdr(cpu); });
+        table[0xB8] = new Instruction("LDDR", DoLddr);
+        table[0xB9] = new Instruction("CPDR", DoCpdr);
         table[0xBA] = new Instruction("INDR", static cpu => { DoInd(cpu, repeat: true); });
         table[0xBB] = new Instruction("OTDR", static cpu => { DoOutd(cpu, repeat: true); });
 
         return table;
     }
 
-    private static void DoIn(Cpu cpu, ref byte reg)
+    private static void DoIn(Cpu cpu, out byte reg)
     {
         var value = ReadPortValue(cpu, cpu.Reg.BC);
         reg = value;

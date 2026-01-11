@@ -22,7 +22,6 @@ public static class CbInstructions
         var table = new Instruction[256];
         for (var opcode = 0; opcode < 0x100; opcode++)
         {
-            var localOpcode = opcode;
             if (opcode < 0x40)
             {
                 var group = opcode / 8;

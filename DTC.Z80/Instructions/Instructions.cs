@@ -952,39 +952,39 @@ public static class Instructions
         ),
         new Instruction(
             "CP A,B", // 0xB8
-            static cpu => { DoCP(cpu, cpu.Reg.B); }
+            static cpu => { DoCp(cpu, cpu.Reg.B); }
         ),
         new Instruction(
             "CP A,C", // 0xB9
-            static cpu => { DoCP(cpu, cpu.Reg.C); }
+            static cpu => { DoCp(cpu, cpu.Reg.C); }
         ),
         new Instruction(
             "CP A,D", // 0xBA
-            static cpu => { DoCP(cpu, cpu.Reg.D); }
+            static cpu => { DoCp(cpu, cpu.Reg.D); }
         ),
         new Instruction(
             "CP A,E", // 0xBB
-            static cpu => { DoCP(cpu, cpu.Reg.E); }
+            static cpu => { DoCp(cpu, cpu.Reg.E); }
         ),
         new Instruction(
             "CP A,H", // 0xBC
-            static cpu => { DoCP(cpu, cpu.Reg.H); }
+            static cpu => { DoCp(cpu, cpu.Reg.H); }
         ),
         new Instruction(
             "CP A,L", // 0xBD
-            static cpu => { DoCP(cpu, cpu.Reg.L); }
+            static cpu => { DoCp(cpu, cpu.Reg.L); }
         ),
         new Instruction(
             "CP A,(HL)", // 0xBE
             static cpu =>
             {
                 var value = cpu.Read8(cpu.Reg.HL);
-                DoCP(cpu, value);
+                DoCp(cpu, value);
             }
         ),
         new Instruction(
             "CP A,A", // 0xBF
-            static cpu => { DoCP(cpu, cpu.Reg.A); }
+            static cpu => { DoCp(cpu, cpu.Reg.A); }
         ),
         new Instruction(
             "RET NZ", // 0xC0
@@ -1273,8 +1273,15 @@ public static class Instructions
             }
         ),
         new Instruction(
-            "#INV_E0",
-            _ => throw new InvalidOperationException("Invalid instruction.")),
+            "RET PO", // 0xE0
+            static cpu =>
+            {
+                cpu.InternalWait(1);
+                if (cpu.Reg.Pf)
+                    return;
+                DoRET(cpu);
+            }
+        ),
         new Instruction(
             "POP HL", // 0xE1
             static cpu =>
@@ -1289,8 +1296,15 @@ public static class Instructions
             }
         ),
         new Instruction(
-            "#INV_E2",
-            _ => throw new InvalidOperationException("Invalid instruction.")),
+            "JP PO,a16", // 0xE2 nn nn
+            static cpu =>
+            {
+                var target = cpu.Fetch16();
+                if (cpu.Reg.Pf)
+                    return;
+                cpu.Reg.PC = target;
+            }
+        ),
         new Instruction(
             "EX (SP),HL", // 0xE3
             static cpu =>
@@ -1305,8 +1319,17 @@ public static class Instructions
                 cpu.InternalWait(3);
             }),
         new Instruction(
-            "#INV_E4",
-            _ => throw new InvalidOperationException("Invalid instruction.")),
+            "CALL PO,a16", // 0xE4 nn nn
+            static cpu =>
+            {
+                var addr = cpu.Fetch16();
+                if (cpu.Reg.Pf)
+                    return; // No jump.
+                cpu.PushPC();
+                cpu.Reg.PC = addr;
+                cpu.InternalWait(1);
+            }
+        ),
         new Instruction(
             "PUSH HL", // 0xE5
             static cpu =>
@@ -1330,15 +1353,29 @@ public static class Instructions
             }
         ),
         new Instruction(
-            "#INV_E8",
-            _ => throw new InvalidOperationException("Invalid instruction.")),
+            "RET PE", // 0xE8
+            static cpu =>
+            {
+                cpu.InternalWait(1);
+                if (!cpu.Reg.Pf)
+                    return;
+                DoRET(cpu);
+            }
+        ),
         new Instruction(
             "JP HL", // 0xE9
             static cpu => { cpu.Reg.PC = cpu.Reg.HL; }
         ),
         new Instruction(
-            "#INV_EA",
-            _ => throw new InvalidOperationException("Invalid instruction.")),
+            "JP PE,a16", // 0xEA nn nn
+            static cpu =>
+            {
+                var target = cpu.Fetch16();
+                if (!cpu.Reg.Pf)
+                    return;
+                cpu.Reg.PC = target;
+            }
+        ),
         new Instruction(
             "EX DE,HL", // 0xEB
             static cpu =>
@@ -1346,8 +1383,17 @@ public static class Instructions
                 (cpu.Reg.DE, cpu.Reg.HL) = (cpu.Reg.HL, cpu.Reg.DE);
             }),
         new Instruction(
-            "#INV_EC",
-            _ => throw new InvalidOperationException("Invalid instruction.")),
+            "CALL PE,a16", // 0xEC nn nn
+            static cpu =>
+            {
+                var addr = cpu.Fetch16();
+                if (!cpu.Reg.Pf)
+                    return; // No jump.
+                cpu.PushPC();
+                cpu.Reg.PC = addr;
+                cpu.InternalWait(1);
+            }
+        ),
         new Instruction(
             "PREFIX ED", // 0xED
             static cpu =>
@@ -1372,8 +1418,15 @@ public static class Instructions
             }
         ),
         new Instruction(
-            "#INV_F0",
-            _ => throw new InvalidOperationException("Invalid instruction.")),
+            "RET P", // 0xF0
+            static cpu =>
+            {
+                cpu.InternalWait(1);
+                if (cpu.Reg.Sf)
+                    return;
+                DoRET(cpu);
+            }
+        ),
         new Instruction(
             "POP AF", // 0xF1
             static cpu =>
@@ -1388,8 +1441,15 @@ public static class Instructions
             }
         ),
         new Instruction(
-            "#INV_F2",
-            _ => throw new InvalidOperationException("Invalid instruction.")),
+            "JP P,a16", // 0xF2 nn nn
+            static cpu =>
+            {
+                var target = cpu.Fetch16();
+                if (cpu.Reg.Sf)
+                    return;
+                cpu.Reg.PC = target;
+            }
+        ),
         new Instruction(
             "DI", // 0xF3
             static cpu =>
@@ -1399,8 +1459,17 @@ public static class Instructions
             }
         ),
         new Instruction(
-            "#INV_F4",
-            _ => throw new InvalidOperationException("Invalid instruction.")),
+            "CALL P,a16", // 0xF4 nn nn
+            static cpu =>
+            {
+                var addr = cpu.Fetch16();
+                if (cpu.Reg.Sf)
+                    return; // No jump.
+                cpu.PushPC();
+                cpu.Reg.PC = addr;
+                cpu.InternalWait(1);
+            }
+        ),
         new Instruction(
             "PUSH AF", // 0xF5
             static cpu =>
@@ -1424,8 +1493,15 @@ public static class Instructions
             }
         ),
         new Instruction(
-            "#INV_F8",
-            _ => throw new InvalidOperationException("Invalid instruction.")),
+            "RET M", // 0xF8
+            static cpu =>
+            {
+                cpu.InternalWait(1);
+                if (!cpu.Reg.Sf)
+                    return;
+                DoRET(cpu);
+            }
+        ),
         new Instruction(
             "LD SP,HL", // 0xF9
             static cpu =>
@@ -1435,8 +1511,15 @@ public static class Instructions
             }
         ),
         new Instruction(
-            "#INV_FA",
-            _ => throw new InvalidOperationException("Invalid instruction.")),
+            "JP M,a16", // 0xFA nn nn
+            static cpu =>
+            {
+                var target = cpu.Fetch16();
+                if (!cpu.Reg.Sf)
+                    return;
+                cpu.Reg.PC = target;
+            }
+        ),
         new Instruction(
             "EI", // 0xFB
             static cpu =>
@@ -1445,8 +1528,17 @@ public static class Instructions
                 cpu.TheRegisters.IFF2 = true;
             }),
         new Instruction(
-            "#INV_FC",
-            _ => throw new InvalidOperationException("Invalid instruction.")),
+            "CALL M,a16", // 0xFC nn nn
+            static cpu =>
+            {
+                var addr = cpu.Fetch16();
+                if (!cpu.Reg.Sf)
+                    return; // No jump.
+                cpu.PushPC();
+                cpu.Reg.PC = addr;
+                cpu.InternalWait(1);
+            }
+        ),
         new Instruction(
             "#INV_FD",
             _ => throw new InvalidOperationException("Invalid instruction.")),
@@ -1454,7 +1546,7 @@ public static class Instructions
             "CP A,nn", // 0xFE nn
             static cpu =>
             {
-                DoCP(cpu, cpu.Fetch8());
+                DoCp(cpu, cpu.Fetch8());
             }
         ),
         new Instruction(
@@ -1531,7 +1623,7 @@ public static class Instructions
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void DoCP(Cpu cpu, byte value)
+    private static void DoCp(Cpu cpu, byte value)
     {
         cpu.Alu.SubtractAndSetFlags(cpu.Reg.A, value, subCf: false);
         cpu.Reg.Flag5 = value.IsBitSet(5);
