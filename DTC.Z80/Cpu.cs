@@ -48,7 +48,7 @@ public sealed class Cpu
         if (IsHalted)
         {
             TheRegisters.IncrementR();
-            InternalWaitM();
+            InternalWait(4);
             return;
         }
 
@@ -69,8 +69,11 @@ public sealed class Cpu
 
     public byte FetchOpcode8()
     {
+        var value = MainMemory.Read8(TheRegisters.PC);
+        TheRegisters.PC++;
         TheRegisters.IncrementR();
-        return Fetch8();
+        InternalWait(4);
+        return value;
     }
 
     public ushort Fetch16() =>
@@ -79,14 +82,14 @@ public sealed class Cpu
     public byte Read8(ushort address)
     {
         var value = MainMemory.Read8(address);
-        InternalWaitM();
+        InternalWait(3);
         return value;
     }
 
     public void Write8(ushort address, byte value)
     {
         MainMemory.Write8(address, value);
-        InternalWaitM();
+        InternalWait(3);
     }
 
     public void Write16(ushort address, ushort value)
@@ -95,9 +98,12 @@ public sealed class Cpu
         Write8((ushort)(address + 1), (byte)(value >> 8));
     }
 
-    public void InternalWaitM() =>
-        TStates += 4;
-
+    /// <summary>
+    /// Adds extra internal CPU wait cycles (T-states) beyond the implicit opcode fetch.
+    /// Known waits: opcode fetch is 4T, memory read/write is 3T per byte.
+    /// </summary>
+    public void InternalWait(int tStates) =>
+        TStates += tStates;
 
     public void PushPC()
     {

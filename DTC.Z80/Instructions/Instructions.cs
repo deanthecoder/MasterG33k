@@ -40,7 +40,7 @@ public static class Instructions
             static cpu =>
             {
                 cpu.Reg.BC++;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -78,7 +78,7 @@ public static class Instructions
                 cpu.Reg.Cf = sum > 0xFFFF;
                 cpu.Reg.HL = (ushort)sum;
                 cpu.Reg.Nf = false;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -90,7 +90,7 @@ public static class Instructions
             static cpu =>
             {
                 cpu.Reg.BC--;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -136,7 +136,7 @@ public static class Instructions
             static cpu =>
             {
                 cpu.Reg.DE++;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -169,7 +169,7 @@ public static class Instructions
             {
                 var diff = (sbyte)cpu.Fetch8();
                 cpu.Reg.PC = (ushort)(cpu.Reg.PC + diff);
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -181,7 +181,7 @@ public static class Instructions
                 cpu.Reg.Cf = sum > 0xFFFF;
                 cpu.Reg.HL = (ushort)sum;
                 cpu.Reg.Nf = false;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -193,7 +193,7 @@ public static class Instructions
             static cpu =>
             {
                 cpu.Reg.DE--;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -228,7 +228,7 @@ public static class Instructions
                 if (cpu.Reg.Zf)
                     return;
                 cpu.Reg.PC = (ushort)(cpu.Reg.PC + diff);
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -252,7 +252,7 @@ public static class Instructions
             static cpu =>
             {
                 cpu.Reg.HL++;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -303,7 +303,7 @@ public static class Instructions
                 if (!cpu.Reg.Zf)
                     return;
                 cpu.Reg.PC = (ushort)(cpu.Reg.PC + diff);
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -315,7 +315,7 @@ public static class Instructions
                 cpu.Reg.Cf = sum > 0xFFFF;
                 cpu.Reg.HL = (ushort)sum;
                 cpu.Reg.Nf = false;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -331,7 +331,7 @@ public static class Instructions
             static cpu =>
             {
                 cpu.Reg.HL--;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -363,7 +363,7 @@ public static class Instructions
                 if (cpu.Reg.Cf)
                     return;
                 cpu.Reg.PC = (ushort)(cpu.Reg.PC + diff);
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -383,7 +383,7 @@ public static class Instructions
             static cpu =>
             {
                 cpu.Reg.SP++;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -425,7 +425,7 @@ public static class Instructions
                 if (!cpu.Reg.Cf)
                     return;
                 cpu.Reg.PC = (ushort)(cpu.Reg.PC + diff);
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -437,7 +437,7 @@ public static class Instructions
                 cpu.Reg.Cf = sum > 0xFFFF;
                 cpu.Reg.HL = (ushort)sum;
                 cpu.Reg.Nf = false;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -453,7 +453,7 @@ public static class Instructions
             static cpu =>
             {
                 cpu.Reg.SP--;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -1064,7 +1064,7 @@ public static class Instructions
             "RET NZ", // 0xC0
             static cpu =>
             {
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
                 if (cpu.Reg.Zf)
                     return;
                 DoRET(cpu);
@@ -1091,7 +1091,7 @@ public static class Instructions
                 if (cpu.Reg.Zf)
                     return;
                 cpu.Reg.PC = target;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -1099,7 +1099,7 @@ public static class Instructions
             static cpu =>
             {
                 cpu.Reg.PC = cpu.Fetch16();
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -1111,14 +1111,14 @@ public static class Instructions
                     return; // No jump.
                 cpu.PushPC();
                 cpu.Reg.PC = addr;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
             "PUSH BC", // 0xC5
             static cpu =>
             {
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
                 cpu.Write8(--cpu.Reg.SP, cpu.Reg.B);
                 cpu.Write8(--cpu.Reg.SP, cpu.Reg.C);
             }
@@ -1131,7 +1131,7 @@ public static class Instructions
             "RST $00", // 0xC7
             static cpu =>
             {
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
                 cpu.PushPC();
                 cpu.Reg.PC = 0x00;
             }
@@ -1140,7 +1140,7 @@ public static class Instructions
             "RET Z", // 0xC8
             static cpu =>
             {
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
                 if (!cpu.Reg.Zf)
                     return;
                 DoRET(cpu);
@@ -1158,7 +1158,7 @@ public static class Instructions
                 if (!cpu.Reg.Zf)
                     return;
                 cpu.Reg.PC = target;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         null, // 0xCB
@@ -1171,7 +1171,7 @@ public static class Instructions
                     return; // No jump.
                 cpu.PushPC();
                 cpu.Reg.PC = addr;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -1181,7 +1181,7 @@ public static class Instructions
                 var addr = cpu.Fetch16();
                 cpu.PushPC();
                 cpu.Reg.PC = addr;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -1192,7 +1192,7 @@ public static class Instructions
             "RST $08", // 0xCF
             static cpu =>
             {
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
                 cpu.PushPC();
                 cpu.Reg.PC = 0x08;
             }
@@ -1201,7 +1201,7 @@ public static class Instructions
             "RET NC", // 0xD0
             static cpu =>
             {
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
                 if (cpu.Reg.Cf)
                     return;
                 DoRET(cpu);
@@ -1228,7 +1228,7 @@ public static class Instructions
                 if (cpu.Reg.Cf)
                     return;
                 cpu.Reg.PC = target;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -1243,14 +1243,14 @@ public static class Instructions
                     return; // No jump.
                 cpu.PushPC();
                 cpu.Reg.PC = addr;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
             "PUSH DE", // 0xD5
             static cpu =>
             {
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
                 cpu.Write8(--cpu.Reg.SP, cpu.Reg.D);
                 cpu.Write8(--cpu.Reg.SP, cpu.Reg.E);
             }
@@ -1263,7 +1263,7 @@ public static class Instructions
             "RST $10", // 0xD7
             static cpu =>
             {
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
                 cpu.PushPC();
                 cpu.Reg.PC = 0x10;
             }
@@ -1272,7 +1272,7 @@ public static class Instructions
             "RET C", // 0xD8
             static cpu =>
             {
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
                 if (!cpu.Reg.Cf)
                     return;
                 DoRET(cpu);
@@ -1295,7 +1295,7 @@ public static class Instructions
                 if (!cpu.Reg.Cf)
                     return;
                 cpu.Reg.PC = target;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -1310,7 +1310,7 @@ public static class Instructions
                     return; // No jump.
                 cpu.PushPC();
                 cpu.Reg.PC = addr;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -1324,7 +1324,7 @@ public static class Instructions
             "RST $18", // 0xDF
             static cpu =>
             {
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
                 cpu.PushPC();
                 cpu.Reg.PC = 0x18;
             }
@@ -1358,7 +1358,7 @@ public static class Instructions
             "PUSH HL", // 0xE5
             static cpu =>
             {
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
                 cpu.Write8(--cpu.Reg.SP, cpu.Reg.H);
                 cpu.Write8(--cpu.Reg.SP, cpu.Reg.L);
             }
@@ -1371,7 +1371,7 @@ public static class Instructions
             "RST $20", // 0xE7
             static cpu =>
             {
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
                 cpu.PushPC();
                 cpu.Reg.PC = 0x20;
             }
@@ -1403,7 +1403,7 @@ public static class Instructions
             "RST $28", // 0xEF
             static cpu =>
             {
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
                 cpu.PushPC();
                 cpu.Reg.PC = 0x28;
             }
@@ -1446,7 +1446,7 @@ public static class Instructions
             "PUSH AF", // 0xF5
             static cpu =>
             {
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
                 cpu.Write8(--cpu.Reg.SP, cpu.Reg.A);
                 cpu.Write8(--cpu.Reg.SP, cpu.Reg.F);
             }
@@ -1459,7 +1459,7 @@ public static class Instructions
             "RST $30", // 0xF7
             static cpu =>
             {
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
                 cpu.PushPC();
                 cpu.Reg.PC = 0x30;
             }
@@ -1472,7 +1472,7 @@ public static class Instructions
             static cpu =>
             {
                 cpu.Reg.SP = cpu.Reg.HL;
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -1506,7 +1506,7 @@ public static class Instructions
             "RST $38", // 0xFF
             static cpu =>
             {
-                cpu.InternalWaitM();
+                cpu.InternalWait(2);
                 cpu.PushPC();
                 cpu.Reg.PC = 0x38;
             }
@@ -1519,7 +1519,7 @@ public static class Instructions
         var lo = cpu.Read8(cpu.Reg.SP++);
         var hi = cpu.Read8(cpu.Reg.SP++);
         cpu.Reg.PC = (ushort)(hi << 8 | lo);
-        cpu.InternalWaitM();
+        cpu.InternalWait(2);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
