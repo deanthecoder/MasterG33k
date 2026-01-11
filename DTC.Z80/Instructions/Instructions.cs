@@ -1090,8 +1090,6 @@ public static class Instructions
             {
                 var cbOpcode = cpu.FetchOpcode8();
                 var instruction = CbInstructions.Table[cbOpcode];
-                if (cpu.InstructionLogger.IsEnabled)
-                    cpu.InstructionLogger.Write(() => $"CB {cbOpcode:X2} {instruction?.Mnemonic ?? "??"}");
                 instruction?.Execute(cpu);
             }
         ),
@@ -1261,8 +1259,6 @@ public static class Instructions
             static cpu =>
             {
                 var ddOpcode = cpu.FetchOpcode8();
-                if (cpu.InstructionLogger.IsEnabled)
-                    cpu.InstructionLogger.Write(() => $"DD {ddOpcode:X2}");
                 IndexInstructions.Execute(cpu, useIX: true, ddOpcode);
             }),
         new Instruction(
@@ -1406,8 +1402,6 @@ public static class Instructions
             {
                 var edOpcode = cpu.FetchOpcode8();
                 var instruction = EdInstructions.Table[edOpcode];
-                if (cpu.InstructionLogger.IsEnabled)
-                    cpu.InstructionLogger.Write(() => $"ED {edOpcode:X2} {instruction?.Mnemonic ?? "??"}");
                 instruction?.Execute(cpu);
             }),
         new Instruction(
@@ -1550,8 +1544,6 @@ public static class Instructions
             static cpu =>
             {
                 var fdOpcode = cpu.FetchOpcode8();
-                if (cpu.InstructionLogger.IsEnabled)
-                    cpu.InstructionLogger.Write(() => $"FD {fdOpcode:X2}");
                 IndexInstructions.Execute(cpu, useIX: false, fdOpcode);
             }),
         new Instruction(

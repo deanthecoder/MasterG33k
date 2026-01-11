@@ -244,4 +244,10 @@ public sealed class Registers
         IFF1 = IFF2 = false;
         IM = 0;
     }
+
+    public override string ToString() =>
+        $"A:{A:X2} BC:{BC:X4} DE:{DE:X4} HL:{HL:X4} SP:{SP:X4} PC:{PC:X4}";
+
+    public string FlagsAsString() =>
+        $"{(Sf ? "S" : "-")}{(Zf ? "Z" : "-")}{(Flag5 ? "5" : "-")}{(Hf ? "H" : "-")}{(Flag3 ? "3" : "-")}{(Pf ? "P" : "-")}{(Nf ? "N" : "-")}{(Cf ? "C" : "-")}";
 }

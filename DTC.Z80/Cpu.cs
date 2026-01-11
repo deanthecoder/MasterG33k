@@ -55,10 +55,22 @@ public sealed class Cpu
         }
 
         var pc = TheRegisters.PC;
+        var isLogging = InstructionLogger.IsEnabled;
+        string preRegState = null;
+        string preFlags = null;
+        if (isLogging)
+        {
+            preRegState = Reg.ToString();
+            preFlags = Reg.FlagsAsString();
+        }
+
         var opcode = FetchOpcode8();
         var instruction = Instructions.Instructions.Table[opcode];
-        if (InstructionLogger.IsEnabled)
-            InstructionLogger.Write(() => $"{pc:X4}: {opcode:X2} {instruction?.Mnemonic ?? "??"}");
+        if (isLogging)
+        {
+            var disassembly = Disassembler.GetInstructionWithOperands(Bus, pc);
+            InstructionLogger.Write(() => $"{disassembly,-19}|{preRegState,-32}|{preFlags}");
+        }
         instruction?.Execute(this);
     }
 

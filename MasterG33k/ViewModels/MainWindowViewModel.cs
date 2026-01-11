@@ -225,7 +225,15 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     public void ExportTileMap() => Logger.Instance.Info("Tile map export is not implemented yet.");
 
-    public void ResetDevice() => Logger.Instance.Info("Reset is not implemented yet.");
+    public void ResetDevice()
+    {
+        lock (m_cpuStepLock)
+        {
+            m_cpu.Reset();
+            m_clockSync.Reset();
+        }
+        Logger.Instance.Info("CPU reset.");
+    }
 
     public void DumpCpuHistory() =>
         m_cpu.InstructionLogger.DumpToConsole();

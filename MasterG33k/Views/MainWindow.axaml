@@ -32,6 +32,10 @@
         </Style>
     </Window.Styles>
 
+    <Window.KeyBindings>
+        <KeyBinding Command="{Binding ResetDevice}" Gesture="{OnPlatform 'ctrl+r', macOS='⌘+r'}" />
+    </Window.KeyBindings>
+
     <dialogHostAvalonia:DialogHost x:Name="Host" OverlayBackground="Black">
         <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,*">
             <Grid ColumnDefinitions="*,Auto,Auto,Auto">
@@ -74,8 +78,7 @@
 
                     <MenuItem Header="_Emulation">
                         <MenuItem Header="_Reset Console" Command="{Binding ResetDevice}"
-                                  InputGesture="{OnPlatform 'ctrl+r', macOS='⌘+r'}"
-                                  IsEnabled="False" />
+                                  InputGesture="{OnPlatform 'ctrl+r', macOS='⌘+r'}" />
                     </MenuItem>
 
                     <MenuItem Header="_Display">
