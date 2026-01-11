@@ -59,6 +59,12 @@ public sealed class SmsVdp
         Array.Clear(m_vram, 0, m_vram.Length);
         Array.Clear(m_cram, 0, m_cram.Length);
         Array.Clear(m_registers, 0, m_registers.Length);
+
+        // Approx power-on defaults. These keep name/sprite tables in the expected high VRAM regions for early BIOS bring-up.
+        m_registers[2] = 0xFF; // Name table base -> 0x3800.
+        m_registers[4] = 0xFF; // Pattern base bit set (commonly 0x0000/0x2000 depending on mode); corrected by fallback in RenderFrame().
+        m_registers[5] = 0xFF; // Sprite attribute table base -> 0x3F00.
+        m_registers[6] = 0xFF; // Sprite pattern base bit.
         Array.Clear(m_frameBuffer, 0, m_frameBuffer.Length);
         m_address = 0;
         m_controlLatchLow = 0;
@@ -166,8 +172,11 @@ public sealed class SmsVdp
             if (m_cram[i] != 0)
                 nonZeroCram++;
 
+        var nameTableBaseFromRegs = ((m_registers[2] & 0x0E) << 10) & 0x3FFF;
+        var patternBaseFromRegs = ((m_registers[4] & 0x04) << 11) & 0x3FFF;
+
         var nameTableBase = SelectNameTableBase();
-        var primaryPatternBase = (m_registers[4] & 0x04) << 11;
+        var primaryPatternBase = patternBaseFromRegs;
         var alternatePatternBase = primaryPatternBase ^ 0x2000;
         var (primaryHits, alternateHits, maxTile) = CountPatternHits(nameTableBase, primaryPatternBase, alternatePatternBase);
         var nameEntries = 0;
@@ -190,8 +199,8 @@ public sealed class SmsVdp
                $"VRAM non-zero={nonZeroVram}, CRAM non-zero={nonZeroCram}, Name entries={nonZeroEntries}/{nameEntries} | " +
                $"R1={m_registers[1]:X2} R2={m_registers[2]:X2} R4={m_registers[4]:X2} R5={m_registers[5]:X2} " +
                $"R8={m_registers[8]:X2} R9={m_registers[9]:X2} Addr={m_address:X4} Mode={m_accessMode} | " +
-               $"NameBase=0x{nameTableBase:X4} Sample={Convert.ToHexString(nameSample)} | " +
-               $"PatternBase=0x{primaryPatternBase:X4}/0x{alternatePatternBase:X4} Hits={primaryHits}/{alternateHits} MaxTile={maxTile}";
+               $"NameBase(reg)=0x{nameTableBaseFromRegs:X4} NameBase(sel)=0x{nameTableBase:X4} Sample={Convert.ToHexString(nameSample)} | " +
+               $"PatternBase(reg)=0x{patternBaseFromRegs:X4} PatternBase(sel)=0x{primaryPatternBase:X4}/0x{alternatePatternBase:X4} Hits={primaryHits}/{alternateHits} MaxTile={maxTile}";
     }
 
     private void AdvanceScanline()
@@ -229,10 +238,18 @@ public sealed class SmsVdp
 
     private void RenderFrame()
     {
-        var nameTableBase = SelectNameTableBase();
-        var patternBase = (m_registers[4] & 0x04) << 11;
+        // Use the VDP registers directly. Heuristics are useful for bring-up, but can break when games switch tables mid-frame or between screens.
+        var nameTableBase = ((m_registers[2] & 0x0E) << 10) & 0x3FFF;
+        var patternBase = ((m_registers[4] & 0x04) << 11) & 0x3FFF;
+
+        // Bring-up fallback: some BIOS/games use the alternate pattern region. Prefer whichever region actually contains the referenced tiles.
         var alternatePatternBase = patternBase ^ 0x2000;
-        patternBase = SelectPatternBase(nameTableBase, patternBase, alternatePatternBase);
+        var (primaryHits, alternateHits, _) = CountPatternHits(nameTableBase, patternBase, alternatePatternBase);
+        if (alternateHits > primaryHits)
+        {
+            patternBase = alternatePatternBase;
+        }
+
         var scrollX = m_registers[8];
         var scrollY = m_registers[9];
 
