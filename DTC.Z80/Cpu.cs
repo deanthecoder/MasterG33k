@@ -19,6 +19,7 @@ public sealed class Cpu
     public Registers TheRegisters { get; }
     public InstructionLogger InstructionLogger { get; } = new();
     public Memory MainMemory { get; }
+    public Alu Alu { get; }
 
     public bool IsHalted { get; set; }
     // ReSharper disable InconsistentNaming
@@ -32,6 +33,7 @@ public sealed class Cpu
         TheRegisters = new Registers();
         Reg = TheRegisters;
         Bus = new Bus(MainMemory);
+        Alu = new Alu(TheRegisters);
     }
 
     public Bus Bus { get; }

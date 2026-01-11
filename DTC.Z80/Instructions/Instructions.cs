@@ -271,28 +271,7 @@ public static class Instructions
             "DAA", // 0x27
             static cpu =>
             {
-                if (cpu.Reg.Nf)
-                {
-                    var adjust = cpu.Reg.Hf ? 0x06 : 0x00;
-                    if (cpu.Reg.Cf)
-                        adjust |= 0x60;
-
-                    cpu.Reg.A = (byte)(cpu.Reg.A - adjust);
-                }
-                else
-                {
-                    var adjust = cpu.Reg.Hf || (cpu.Reg.A & 0x0F) > 0x09 ? 0x06 : 0x00;
-                    if (cpu.Reg.Cf || cpu.Reg.A > 0x99)
-                    {
-                        adjust |= 0x60;
-                        cpu.Reg.Cf = true;
-                    }
-
-                    cpu.Reg.A = (byte)(cpu.Reg.A + adjust);
-                }
-
-                cpu.Reg.Zf = cpu.Reg.A == 0;
-                cpu.Reg.Hf = false;
+                cpu.Alu.AdjustAccumulatorToBcd();
             }
         ),
         new Instruction(
@@ -1525,91 +1504,54 @@ public static class Instructions
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void DoSBC(Cpu cpu, byte value)
     {
-        var c = cpu.Reg.Cf ? 1 : 0;
-        cpu.Reg.Nf = true;
-        cpu.Reg.Hf = (cpu.Reg.A & 0xF) < (value & 0xF) + c;
-        cpu.Reg.Cf = cpu.Reg.A < value + c;
-        cpu.Reg.A = (byte)(cpu.Reg.A - value - c);
-        cpu.Reg.Zf = cpu.Reg.A == 0;
+        cpu.Reg.A = cpu.Alu.SubtractAndSetFlags(cpu.Reg.A, value, subCf: true);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void DoADC(Cpu cpu, byte value)
     {
-        cpu.Reg.Hf = (cpu.Reg.A & 0xF) + (value & 0xF) + (cpu.Reg.Cf ? 1 : 0) > 0xF;
-        var sum = cpu.Reg.A + value + (cpu.Reg.Cf ? 1 : 0);
-        cpu.Reg.A = (byte)sum;
-        cpu.Reg.Zf = cpu.Reg.A == 0;
-        cpu.Reg.Nf = false;
-        cpu.Reg.Cf = sum > 0xFF;
+        cpu.Reg.A = cpu.Alu.AddAndSetFlags(cpu.Reg.A, value, addCf: true);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void DoADD(Cpu cpu, byte value)
     {
-        cpu.Reg.SetHfForInc(cpu.Reg.A, value);
-        var sum = cpu.Reg.A + value;
-        cpu.Reg.A = (byte)sum;
-        cpu.Reg.Zf = cpu.Reg.A == 0;
-        cpu.Reg.Nf = false;
-        cpu.Reg.Cf = sum > 0xFF;
+        cpu.Reg.A = cpu.Alu.AddAndSetFlags(cpu.Reg.A, value, addCf: false);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void DoSUB(Cpu cpu, byte value)
     {
-        cpu.Reg.SetHfForDec(cpu.Reg.A, value);
-        cpu.Reg.Cf = cpu.Reg.A < value;
-        cpu.Reg.A -= value;
-        cpu.Reg.Zf = cpu.Reg.A == 0;
-        cpu.Reg.Nf = true;
+        cpu.Reg.A = cpu.Alu.SubtractAndSetFlags(cpu.Reg.A, value, subCf: false);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void DoINC(Cpu cpu, ref byte reg)
     {
-        cpu.Reg.SetHfForInc(reg);
-        reg++;
-        cpu.Reg.Zf = reg == 0;
-        cpu.Reg.Nf = false;
+        reg = cpu.Alu.IncAndSetFlags(reg);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void DoDEC(Cpu cpu, ref byte reg)
     {
-        cpu.Reg.SetHfForDec(reg);
-        reg--;
-        cpu.Reg.Zf = reg == 0;
-        cpu.Reg.Nf = true;
+        reg = cpu.Alu.DecAndSetFlags(reg);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void DoAND(Cpu cpu, byte value)
     {
-        cpu.Reg.A &= value;
-        cpu.Reg.Zf = cpu.Reg.A == 0;
-        cpu.Reg.Nf = false;
-        cpu.Reg.Hf = true;
-        cpu.Reg.Cf = false;
+        cpu.Alu.And(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void DoXOR(Cpu cpu, byte value)
     {
-        cpu.Reg.A ^= value;
-        cpu.Reg.Zf = cpu.Reg.A == 0;
-        cpu.Reg.Nf = false;
-        cpu.Reg.Hf = false;
-        cpu.Reg.Cf = false;
+        cpu.Alu.Xor(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void DoOR(Cpu cpu, byte value)
     {
-        cpu.Reg.A |= value;
-        cpu.Reg.Zf = cpu.Reg.A == 0;
-        cpu.Reg.Nf = false;
-        cpu.Reg.Hf = false;
-        cpu.Reg.Cf = false;
+        cpu.Alu.Or(value);
     }
 }

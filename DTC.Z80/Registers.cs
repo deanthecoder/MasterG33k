@@ -127,12 +127,16 @@ public sealed class Registers
 
     /// <summary>Interrupt page address register.</summary>
     public byte I { get; set; }
+    
     /// <summary>Memory refresh register.</summary>
     public byte R { get; set; }
+    
     /// <summary>Interrupt flip-flop 1 (master interrupt enable).</summary>
     public bool IFF1 { get; set; }
+    
     /// <summary>Interrupt flip-flop 2 (saved master interrupt enable).</summary>
     public bool IFF2 { get; set; }
+    
     /// <summary>Interrupt mode (IM 0/1/2).</summary>
     public byte IM { get; set; }
 
@@ -216,6 +220,17 @@ public sealed class Registers
 
     public void SetHfForDec(byte value, byte dec = 1) =>
         Hf = (value & 0x0F) < (dec & 0x0F);
+
+    public void SetFlags53From(ushort value) =>
+        SetFlags53From((byte)(value >> 8));
+
+    public void SetFlags53From(byte value)
+    {
+        Flag5 = value.IsBitSet(5);
+        Flag3 = value.IsBitSet(3);
+    }
+
+    public void SetFlags53FromA() => SetFlags53From(A);
 
     private static byte SetFlag(byte flags, byte bit, bool value) =>
         value ? flags.SetBit(bit) : flags.ResetBit(bit);
