@@ -1084,7 +1084,17 @@ public static class Instructions
                 cpu.Reg.PC = target;
             }
         ),
-        null, // 0xCB
+        new Instruction(
+            "PREFIX CB", // 0xCB
+            static cpu =>
+            {
+                var cbOpcode = cpu.FetchOpcode8();
+                var instruction = CbInstructions.Table[cbOpcode];
+                if (cpu.InstructionLogger.IsEnabled)
+                    cpu.InstructionLogger.Write(() => $"CB {cbOpcode:X2} {instruction?.Mnemonic ?? "??"}");
+                instruction?.Execute(cpu);
+            }
+        ),
         new Instruction(
             "CALL Z,a16", // 0xCC nn nn
             static cpu =>
