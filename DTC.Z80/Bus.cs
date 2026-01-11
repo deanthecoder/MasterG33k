@@ -11,24 +11,56 @@
 namespace DTC.Z80;
 
 /// <summary>
-/// Minimal Z80 bus stub. Provides a flat 64KB address space for early CPU testing.
+/// Minimal Z80 bus with device mapping for memory and ports.
 /// </summary>
 public sealed class Bus
 {
-    private readonly Memory m_memory;
+    private readonly IMemDevice[] m_devices = new IMemDevice[0x10000];
 
-    public Bus(Memory memory)
+    public Memory MainMemory { get; }
+    public IPortDevice PortDevice { get; private set; }
+
+    public Bus(Memory memory, IPortDevice portDevice = null)
     {
-        m_memory = memory ?? throw new ArgumentNullException(nameof(memory));
+        MainMemory = memory ?? throw new ArgumentNullException(nameof(memory));
+        PortDevice = portDevice ?? DefaultPortDevice.Instance;
+        Attach(MainMemory);
     }
 
-    public byte Read8(ushort address) => m_memory.Read8(address);
+    public void SetPortDevice(IPortDevice portDevice) =>
+        PortDevice = portDevice ?? throw new ArgumentNullException(nameof(portDevice));
 
-    public void Write8(ushort address, byte value) => m_memory.Write8(address, value);
+    public void Attach(IMemDevice device)
+    {
+        if (device == null)
+            throw new ArgumentNullException(nameof(device));
 
-    public ushort Read16(ushort address) => m_memory.Read16(address);
+        for (var addr = (int)device.FromAddr; addr <= device.ToAddr; addr++)
+            m_devices[addr] = device;
+    }
 
-    public void Write16(ushort address, ushort value) => m_memory.Write16(address, value);
+    public byte Read8(ushort address) =>
+        m_devices[address]?.Read8(address) ?? 0xFF;
 
-    
+    public void Write8(ushort address, byte value) =>
+        m_devices[address]?.Write8(address, value);
+
+    public ushort Read16(ushort address)
+    {
+        var lo = Read8(address);
+        var hi = Read8((ushort)(address + 1));
+        return (ushort)(hi << 8 | lo);
+    }
+
+    public void Write16(ushort address, ushort value)
+    {
+        Write8(address, (byte)(value & 0xFF));
+        Write8((ushort)(address + 1), (byte)(value >> 8));
+    }
+
+    public byte ReadPort(ushort portAddress) =>
+        PortDevice?.Read8(portAddress) ?? 0xFF;
+
+    public void WritePort(ushort portAddress, byte value) =>
+        PortDevice?.Write8(portAddress, value);
 }

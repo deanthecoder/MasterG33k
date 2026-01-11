@@ -11,17 +11,21 @@
 namespace DTC.Z80;
 
 /// <summary>
-/// Simple 64KB memory map for tests.
+/// Simple linear RAM device.
 /// </summary>
-public sealed class Memory
+public sealed class Memory : IMemDevice
 {
     public byte[] Data { get; }
+    public ushort FromAddr { get; }
+    public ushort ToAddr { get; }
 
     public Memory(int size = 0x10000)
     {
         if (size <= 0)
             throw new ArgumentOutOfRangeException(nameof(size));
         Data = new byte[size];
+        FromAddr = 0x0000;
+        ToAddr = (ushort)(size - 1);
     }
 
     public byte Read8(ushort address) => Data[address % Data.Length];

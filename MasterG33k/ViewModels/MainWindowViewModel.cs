@@ -105,7 +105,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         Mru.OpenRequested += (_, file) => LoadRomFile(file, addToMru: false);
 
         Display = CreateBlackDisplay();
-        m_cpu = new Cpu(new Memory());
+        m_cpu = new Cpu(new Bus(new Memory()));
         Settings.PropertyChanged += OnSettingsPropertyChanged;
         IsCpuHistoryTracked = Settings.IsCpuHistoryTracked;
 #if DEBUG

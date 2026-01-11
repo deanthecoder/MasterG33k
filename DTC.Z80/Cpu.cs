@@ -27,12 +27,12 @@ public sealed class Cpu
     public long TStatesSinceCpuStart => TStates;
     // ReSharper restore InconsistentNaming
 
-    public Cpu(Memory memory)
+    public Cpu(Bus bus)
     {
-        MainMemory = memory ?? throw new ArgumentNullException(nameof(memory));
+        Bus = bus ?? throw new ArgumentNullException(nameof(bus));
+        MainMemory = Bus.MainMemory;
         TheRegisters = new Registers();
         Reg = TheRegisters;
-        Bus = new Bus(MainMemory);
         Alu = new Alu(TheRegisters);
     }
 
@@ -71,7 +71,7 @@ public sealed class Cpu
 
     public byte FetchOpcode8()
     {
-        var value = MainMemory.Read8(TheRegisters.PC);
+        var value = Bus.Read8(TheRegisters.PC);
         TheRegisters.PC++;
         TheRegisters.IncrementR();
         InternalWait(4);
@@ -83,14 +83,14 @@ public sealed class Cpu
 
     public byte Read8(ushort address)
     {
-        var value = MainMemory.Read8(address);
+        var value = Bus.Read8(address);
         InternalWait(3);
         return value;
     }
 
     public void Write8(ushort address, byte value)
     {
-        MainMemory.Write8(address, value);
+        Bus.Write8(address, value);
         InternalWait(3);
     }
 

@@ -1167,7 +1167,9 @@ public static class Instructions
             "OUT (n),A", // 0xD3 nn
             static cpu =>
             {
-                cpu.Fetch8(); // Port number (ignored for now).
+                var port = cpu.Fetch8();
+                var portAddress = (ushort)((cpu.Reg.A << 8) | port);
+                cpu.Bus.WritePort(portAddress, cpu.Reg.A);
                 cpu.InternalWait(4);
             }),
         new Instruction(
@@ -1237,7 +1239,9 @@ public static class Instructions
             "IN A,(n)", // 0xDB nn
             static cpu =>
             {
-                cpu.Fetch8(); // Port number (ignored for now).
+                var port = cpu.Fetch8();
+                var portAddress = (ushort)((cpu.Reg.A << 8) | port);
+                cpu.Reg.A = cpu.Bus.ReadPort(portAddress);
                 cpu.InternalWait(4);
             }),
         new Instruction(
@@ -1345,8 +1349,15 @@ public static class Instructions
             "#INV_EC",
             _ => throw new InvalidOperationException("Invalid instruction.")),
         new Instruction(
-            "#INV_ED",
-            _ => throw new InvalidOperationException("Invalid instruction.")),
+            "PREFIX ED", // 0xED
+            static cpu =>
+            {
+                var edOpcode = cpu.FetchOpcode8();
+                var instruction = EdInstructions.Table[edOpcode];
+                if (cpu.InstructionLogger.IsEnabled)
+                    cpu.InstructionLogger.Write(() => $"ED {edOpcode:X2} {instruction?.Mnemonic ?? "??"}");
+                instruction?.Execute(cpu);
+            }),
         new Instruction(
             "XOR A,nn", // 0xEE nn
             static cpu => { DoXOR(cpu, cpu.Fetch8()); }

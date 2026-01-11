@@ -29,7 +29,8 @@ public class FuseTests : TestsBase
     {
         var fuseResult = TheResults.First(o => o.TestId == fuseTest.TestId);
 
-        var cpu = new Cpu(new Memory());
+        var bus = new Bus(new Memory(), new FusePortDevice());
+        var cpu = new Cpu(bus);
 #if DEBUG
         cpu.InstructionLogger.IsEnabled = true;
 #endif
