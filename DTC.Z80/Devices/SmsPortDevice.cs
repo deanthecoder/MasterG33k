@@ -8,6 +8,8 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using CSharp.Core.Extensions;
+
 namespace DTC.Z80.Devices;
 
 /// <summary>
@@ -19,6 +21,7 @@ namespace DTC.Z80.Devices;
 public sealed class SmsPortDevice : IPortDevice
 {
     private readonly SmsVdp m_vdp;
+    private readonly SmsJoypad m_joypad;
     private readonly IPortDevice m_fallback;
     private int m_dataWrites;
     private int m_controlWrites;
@@ -31,9 +34,10 @@ public sealed class SmsPortDevice : IPortDevice
     private int m_bcWrites;
     private int m_bdWrites;
 
-    public SmsPortDevice(SmsVdp vdp, IPortDevice fallback = null)
+    public SmsPortDevice(SmsVdp vdp, SmsJoypad joypad = null, IPortDevice fallback = null)
     {
         m_vdp = vdp ?? throw new ArgumentNullException(nameof(vdp));
+        m_joypad = joypad;
         m_fallback = fallback ?? DefaultPortDevice.Instance;
     }
 
@@ -54,6 +58,9 @@ public sealed class SmsPortDevice : IPortDevice
                 return m_vdp.ReadVCounter();
             case 0x7F:
                 return m_vdp.ReadHCounter();
+            case 0xDC:
+            case 0xDD:
+                return ReadJoypad();
             default:
                 m_otherReads++;
                 return m_fallback.Read8(portAddress);
@@ -90,6 +97,27 @@ public sealed class SmsPortDevice : IPortDevice
                 m_fallback.Write8(portAddress, value);
                 return;
         }
+    }
+
+    private byte ReadJoypad()
+    {
+        var state = m_joypad?.GetPressedButtons() ?? SmsJoypad.SmsJoypadButtons.None;
+        var value = (byte)0xFF;
+
+        if ((state & SmsJoypad.SmsJoypadButtons.Up) != 0)
+            value = value.ResetBit(0);
+        if ((state & SmsJoypad.SmsJoypadButtons.Down) != 0)
+            value = value.ResetBit(1);
+        if ((state & SmsJoypad.SmsJoypadButtons.Left) != 0)
+            value = value.ResetBit(2);
+        if ((state & SmsJoypad.SmsJoypadButtons.Right) != 0)
+            value = value.ResetBit(3);
+        if ((state & SmsJoypad.SmsJoypadButtons.Button1) != 0)
+            value = value.ResetBit(4);
+        if ((state & SmsJoypad.SmsJoypadButtons.Button2) != 0)
+            value = value.ResetBit(5);
+
+        return value;
     }
 
     public string GetDebugSummary() =>

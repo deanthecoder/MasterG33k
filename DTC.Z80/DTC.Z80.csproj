@@ -21,4 +21,8 @@
     <ProjectReference Include="..\DTC.Core\CSharp.Core\CSharp.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="SharpHook" Version="5.2.3" />
+  </ItemGroup>
+
 </Project>

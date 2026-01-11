@@ -38,6 +38,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool m_isCpuHistoryTracked;
     private readonly Cpu m_cpu;
     private readonly SmsVdp m_vdp;
+    private readonly SmsJoypad m_joypad;
     private readonly Lock m_cpuStepLock = new();
     private Thread m_cpuThread;
     private bool m_shutdownRequested;
@@ -119,7 +120,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         Display = m_screen.Display;
         m_vdp = new SmsVdp();
         m_vdp.FrameRendered += OnFrameRendered;
-        var portDevice = new SmsPortDevice(m_vdp);
+        m_joypad = new SmsJoypad();
+        var portDevice = new SmsPortDevice(m_vdp, m_joypad);
         m_cpu = new Cpu(new Bus(new Memory(), portDevice));
         m_clockSync = new ClockSync(GetEffectiveCpuHz, () => m_cpu.TStatesSinceCpuStart, () => m_cpu.Reset());
         Settings.PropertyChanged += OnSettingsPropertyChanged;
@@ -322,6 +324,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public void Dispose()
     {
         StopCpu();
+        m_joypad.Dispose();
         m_screen.Dispose();
         Settings.MruFiles = Mru.AsString();
         Settings.PropertyChanged -= OnSettingsPropertyChanged;
