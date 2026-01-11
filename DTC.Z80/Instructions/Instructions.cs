@@ -10,6 +10,7 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System.Runtime.CompilerServices;
+using CSharp.Core.Extensions;
 
 namespace DTC.Z80.Instructions;
 
@@ -61,24 +62,24 @@ public static class Instructions
             {
                 cpu.Reg.Cf = (cpu.Reg.A & 0x80) != 0;
                 cpu.Reg.A = (byte)((cpu.Reg.A << 1) + (cpu.Reg.Cf ? 1 : 0));
-                cpu.Reg.Zf = false;
                 cpu.Reg.Nf = false;
                 cpu.Reg.Hf = false;
+                cpu.Reg.Flag5 = cpu.Reg.A.IsBitSet(5);
+                cpu.Reg.Flag3 = cpu.Reg.A.IsBitSet(3);
             }
         ),
         new Instruction(
-            "#INV_08",
-            _ => throw new InvalidOperationException("Invalid instruction.")),
+            "EX AF, AF′", // 0x08
+            static cpu =>
+            {
+                (cpu.Reg.Main.AF, cpu.Reg.Alt.AF) = (cpu.Reg.Alt.AF, cpu.Reg.Main.AF);
+            }),
         new Instruction(
             "ADD HL,BC", // 0x09
             static cpu =>
             {
-                cpu.Reg.Hf = (cpu.Reg.HL & 0x0FFF) + (cpu.Reg.BC & 0x0FFF) > 0x0FFF;
-                var sum = (uint)cpu.Reg.HL + cpu.Reg.BC;
-                cpu.Reg.Cf = sum > 0xFFFF;
-                cpu.Reg.HL = (ushort)sum;
-                cpu.Reg.Nf = false;
-                cpu.InternalWait(2);
+                cpu.Reg.HL = cpu.Alu.AddAndSetFlags(cpu.Reg.HL, cpu.Reg.BC, addCf: false);
+                cpu.InternalWait(7);
             }
         ),
         new Instruction(
@@ -111,14 +112,24 @@ public static class Instructions
             {
                 cpu.Reg.Cf = (cpu.Reg.A & 0x01) != 0;
                 cpu.Reg.A = (byte)((cpu.Reg.A >> 1) + (cpu.Reg.Cf ? 0x80 : 0x00));
-                cpu.Reg.Zf = false;
                 cpu.Reg.Nf = false;
                 cpu.Reg.Hf = false;
+                cpu.Reg.Flag5 = cpu.Reg.A.IsBitSet(5);
+                cpu.Reg.Flag3 = cpu.Reg.A.IsBitSet(3);
             }
         ),
         new Instruction(
-            "#INV_10",
-            _ => throw new InvalidOperationException("Invalid instruction.")),
+            "DJNZ e8", // 0x10 nn
+            static cpu =>
+            {
+                var diff = (sbyte)cpu.Fetch8();
+                cpu.Reg.B--;
+                cpu.InternalWait(1);
+                if (cpu.Reg.B == 0)
+                    return;
+                cpu.Reg.PC = (ushort)(cpu.Reg.PC + diff);
+                cpu.InternalWait(5);
+            }),
         new Instruction(
             "LD DE,nn", // 0x11 nn nn
             static cpu =>
@@ -158,9 +169,10 @@ public static class Instructions
                 var cf = cpu.Reg.Cf;
                 cpu.Reg.Cf = (cpu.Reg.A & 0x80) != 0;
                 cpu.Reg.A = (byte)((cpu.Reg.A << 1) + (cf ? 1 : 0));
-                cpu.Reg.Zf = false;
                 cpu.Reg.Nf = false;
                 cpu.Reg.Hf = false;
+                cpu.Reg.Flag5 = cpu.Reg.A.IsBitSet(5);
+                cpu.Reg.Flag3 = cpu.Reg.A.IsBitSet(3);
             }
         ),
         new Instruction(
@@ -169,19 +181,15 @@ public static class Instructions
             {
                 var diff = (sbyte)cpu.Fetch8();
                 cpu.Reg.PC = (ushort)(cpu.Reg.PC + diff);
-                cpu.InternalWait(2);
+                cpu.InternalWait(5);
             }
         ),
         new Instruction(
             "ADD HL,DE", // 0x19
             static cpu =>
             {
-                cpu.Reg.Hf = (cpu.Reg.HL & 0x0FFF) + (cpu.Reg.DE & 0x0FFF) > 0x0FFF;
-                var sum = (uint)cpu.Reg.HL + cpu.Reg.DE;
-                cpu.Reg.Cf = sum > 0xFFFF;
-                cpu.Reg.HL = (ushort)sum;
-                cpu.Reg.Nf = false;
-                cpu.InternalWait(2);
+                cpu.Reg.HL = cpu.Alu.AddAndSetFlags(cpu.Reg.HL, cpu.Reg.DE, addCf: false);
+                cpu.InternalWait(7);
             }
         ),
         new Instruction(
@@ -215,9 +223,10 @@ public static class Instructions
                 var cf = cpu.Reg.Cf;
                 cpu.Reg.Cf = (cpu.Reg.A & 0x01) != 0;
                 cpu.Reg.A = (byte)((cpu.Reg.A >> 1) + (cf ? 0x80 : 0x00));
-                cpu.Reg.Zf = false;
                 cpu.Reg.Nf = false;
                 cpu.Reg.Hf = false;
+                cpu.Reg.Flag5 = cpu.Reg.A.IsBitSet(5);
+                cpu.Reg.Flag3 = cpu.Reg.A.IsBitSet(3);
             }
         ),
         new Instruction(
@@ -228,7 +237,7 @@ public static class Instructions
                 if (cpu.Reg.Zf)
                     return;
                 cpu.Reg.PC = (ushort)(cpu.Reg.PC + diff);
-                cpu.InternalWait(2);
+                cpu.InternalWait(5);
             }
         ),
         new Instruction(
@@ -240,11 +249,12 @@ public static class Instructions
             }
         ),
         new Instruction(
-            "LD (HL+),A", // 0x22
+            "LD (nn),HL", // 0x22 nn nn
             static cpu =>
             {
-                cpu.Write8(cpu.Reg.HL, cpu.Reg.A);
-                cpu.Reg.HL++;
+                var addr = cpu.Fetch16();
+                cpu.Write8(addr, cpu.Reg.L);
+                cpu.Write8((ushort)(addr + 1), cpu.Reg.H);
             }
         ),
         new Instruction(
@@ -282,27 +292,25 @@ public static class Instructions
                 if (!cpu.Reg.Zf)
                     return;
                 cpu.Reg.PC = (ushort)(cpu.Reg.PC + diff);
-                cpu.InternalWait(2);
+                cpu.InternalWait(5);
             }
         ),
         new Instruction(
             "ADD HL,HL", // 0x29
             static cpu =>
             {
-                cpu.Reg.Hf = (cpu.Reg.HL & 0x0FFF) + (cpu.Reg.HL & 0x0FFF) > 0x0FFF;
-                var sum = (uint)cpu.Reg.HL + cpu.Reg.HL;
-                cpu.Reg.Cf = sum > 0xFFFF;
-                cpu.Reg.HL = (ushort)sum;
-                cpu.Reg.Nf = false;
-                cpu.InternalWait(2);
+                cpu.Reg.HL = cpu.Alu.AddAndSetFlags(cpu.Reg.HL, cpu.Reg.HL, addCf: false);
+                cpu.InternalWait(7);
             }
         ),
         new Instruction(
-            "LD A,(HL+)", // 0x2A
+            "LD HL,(nn)", // 0x2A nn nn
             static cpu =>
             {
-                cpu.Reg.A = cpu.Read8(cpu.Reg.HL);
-                cpu.Reg.HL++;
+                var addr = cpu.Fetch16();
+                var lo = cpu.Read8(addr);
+                var hi = cpu.Read8((ushort)(addr + 1));
+                cpu.Reg.HL = (ushort)(hi << 8 | lo);
             }
         ),
         new Instruction(
@@ -332,6 +340,7 @@ public static class Instructions
                 cpu.Reg.A = (byte)~cpu.Reg.A;
                 cpu.Reg.Nf = true;
                 cpu.Reg.Hf = true;
+                cpu.Reg.SetFlags53FromA();
             }
         ),
         new Instruction(
@@ -342,7 +351,7 @@ public static class Instructions
                 if (cpu.Reg.Cf)
                     return;
                 cpu.Reg.PC = (ushort)(cpu.Reg.PC + diff);
-                cpu.InternalWait(2);
+                cpu.InternalWait(5);
             }
         ),
         new Instruction(
@@ -350,11 +359,11 @@ public static class Instructions
             static cpu => { cpu.Reg.SP = cpu.Fetch16(); }
         ),
         new Instruction(
-            "LD (HL-),A", // 0x32
+            "LD (nn),A", // 0x32 nn nn
             static cpu =>
             {
-                cpu.Write8(cpu.Reg.HL, cpu.Reg.A);
-                cpu.Reg.HL--;
+                var addr = cpu.Fetch16();
+                cpu.Write8(addr, cpu.Reg.A);
             }
         ),
         new Instruction(
@@ -372,6 +381,7 @@ public static class Instructions
                 var value = cpu.Read8(cpu.Reg.HL);
                 DoINC(cpu, ref value);
                 cpu.Write8(cpu.Reg.HL, value);
+                cpu.InternalWait(1);
             }
         ),
         new Instruction(
@@ -381,6 +391,7 @@ public static class Instructions
                 var value = cpu.Read8(cpu.Reg.HL);
                 DoDEC(cpu, ref value);
                 cpu.Write8(cpu.Reg.HL, value);
+                cpu.InternalWait(1);
             }
         ),
         new Instruction(
@@ -394,6 +405,7 @@ public static class Instructions
                 cpu.Reg.Nf = false;
                 cpu.Reg.Hf = false;
                 cpu.Reg.Cf = true;
+                cpu.Reg.SetFlags53FromA();
             }
         ),
         new Instruction(
@@ -404,27 +416,23 @@ public static class Instructions
                 if (!cpu.Reg.Cf)
                     return;
                 cpu.Reg.PC = (ushort)(cpu.Reg.PC + diff);
-                cpu.InternalWait(2);
+                cpu.InternalWait(5);
             }
         ),
         new Instruction(
             "ADD HL,SP", // 0x39
             static cpu =>
             {
-                cpu.Reg.Hf = (cpu.Reg.HL & 0x0FFF) + (cpu.Reg.SP & 0x0FFF) > 0x0FFF;
-                var sum = (uint)cpu.Reg.HL + cpu.Reg.SP;
-                cpu.Reg.Cf = sum > 0xFFFF;
-                cpu.Reg.HL = (ushort)sum;
-                cpu.Reg.Nf = false;
-                cpu.InternalWait(2);
+                cpu.Reg.HL = cpu.Alu.AddAndSetFlags(cpu.Reg.HL, cpu.Reg.SP, addCf: false);
+                cpu.InternalWait(7);
             }
         ),
         new Instruction(
-            "LD A,(HL-)", // 0x3A
+            "LD A,(nn)", // 0x3A nn nn
             static cpu =>
             {
-                cpu.Reg.A = cpu.Read8(cpu.Reg.HL);
-                cpu.Reg.HL--;
+                var addr = cpu.Fetch16();
+                cpu.Reg.A = cpu.Read8(addr);
             }
         ),
         new Instruction(
@@ -451,9 +459,11 @@ public static class Instructions
             "CCF", // 0x3F
             static cpu =>
             {
+                var cf = cpu.Reg.Cf;
                 cpu.Reg.Nf = false;
-                cpu.Reg.Hf = false;
-                cpu.Reg.Cf = !cpu.Reg.Cf;
+                cpu.Reg.Hf = cf;
+                cpu.Reg.Cf = !cf;
+                cpu.Reg.SetFlags53FromA();
             }
         ),
         new Instruction(
@@ -671,6 +681,7 @@ public static class Instructions
             static cpu =>
             {
                 cpu.IsHalted = true;
+                cpu.Reg.PC--;
             }
         ),
         new Instruction(
@@ -873,13 +884,7 @@ public static class Instructions
         ),
         new Instruction(
             "AND A,A", // 0xA7
-            static cpu =>
-            {
-                cpu.Reg.Zf = cpu.Reg.A == 0;
-                cpu.Reg.Nf = false;
-                cpu.Reg.Hf = true;
-                cpu.Reg.Cf = false;
-            }
+            static cpu => { DoAND(cpu, cpu.Reg.A); }
         ),
         new Instruction(
             "XOR A,B", // 0xA8
@@ -911,14 +916,7 @@ public static class Instructions
         ),
         new Instruction(
             "XOR A,A", // 0xAF
-            static cpu =>
-            {
-                cpu.Reg.A = 0;
-                cpu.Reg.Zf = true;
-                cpu.Reg.Nf = false;
-                cpu.Reg.Hf = false;
-                cpu.Reg.Cf = false;
-            }
+            static cpu => { DoXOR(cpu, cpu.Reg.A); }
         ),
         new Instruction(
             "OR A,B", // 0xB0
@@ -950,100 +948,49 @@ public static class Instructions
         ),
         new Instruction(
             "OR A,A", // 0xB7
-            static cpu =>
-            {
-                cpu.Reg.Zf = cpu.Reg.A == 0;
-                cpu.Reg.Nf = false;
-                cpu.Reg.Hf = false;
-                cpu.Reg.Cf = false;
-            }
+            static cpu => { DoOR(cpu, cpu.Reg.A); }
         ),
         new Instruction(
             "CP A,B", // 0xB8
-            static cpu =>
-            {
-                cpu.Reg.Zf = cpu.Reg.A == cpu.Reg.B;
-                cpu.Reg.Nf = true;
-                cpu.Reg.SetHfForDec(cpu.Reg.A, cpu.Reg.B);
-                cpu.Reg.Cf = cpu.Reg.B > cpu.Reg.A;
-            }
+            static cpu => { DoCP(cpu, cpu.Reg.B); }
         ),
         new Instruction(
             "CP A,C", // 0xB9
-            static cpu =>
-            {
-                cpu.Reg.Zf = cpu.Reg.A == cpu.Reg.C;
-                cpu.Reg.Nf = true;
-                cpu.Reg.SetHfForDec(cpu.Reg.A, cpu.Reg.C);
-                cpu.Reg.Cf = cpu.Reg.C > cpu.Reg.A;
-            }
+            static cpu => { DoCP(cpu, cpu.Reg.C); }
         ),
         new Instruction(
             "CP A,D", // 0xBA
-            static cpu =>
-            {
-                cpu.Reg.Zf = cpu.Reg.A == cpu.Reg.D;
-                cpu.Reg.Nf = true;
-                cpu.Reg.SetHfForDec(cpu.Reg.A, cpu.Reg.D);
-                cpu.Reg.Cf = cpu.Reg.D > cpu.Reg.A;
-            }
+            static cpu => { DoCP(cpu, cpu.Reg.D); }
         ),
         new Instruction(
             "CP A,E", // 0xBB
-            static cpu =>
-            {
-                cpu.Reg.Zf = cpu.Reg.A == cpu.Reg.E;
-                cpu.Reg.Nf = true;
-                cpu.Reg.SetHfForDec(cpu.Reg.A, cpu.Reg.E);
-                cpu.Reg.Cf = cpu.Reg.E > cpu.Reg.A;
-            }
+            static cpu => { DoCP(cpu, cpu.Reg.E); }
         ),
         new Instruction(
             "CP A,H", // 0xBC
-            static cpu =>
-            {
-                cpu.Reg.Zf = cpu.Reg.A == cpu.Reg.H;
-                cpu.Reg.Nf = true;
-                cpu.Reg.SetHfForDec(cpu.Reg.A, cpu.Reg.H);
-                cpu.Reg.Cf = cpu.Reg.H > cpu.Reg.A;
-            }
+            static cpu => { DoCP(cpu, cpu.Reg.H); }
         ),
         new Instruction(
             "CP A,L", // 0xBD
-            static cpu =>
-            {
-                cpu.Reg.Zf = cpu.Reg.A == cpu.Reg.L;
-                cpu.Reg.Nf = true;
-                cpu.Reg.SetHfForDec(cpu.Reg.A, cpu.Reg.L);
-                cpu.Reg.Cf = cpu.Reg.L > cpu.Reg.A;
-            }
+            static cpu => { DoCP(cpu, cpu.Reg.L); }
         ),
         new Instruction(
             "CP A,(HL)", // 0xBE
             static cpu =>
             {
                 var value = cpu.Read8(cpu.Reg.HL);
-                cpu.Reg.Zf = cpu.Reg.A == value;
-                cpu.Reg.Nf = true;
-                cpu.Reg.SetHfForDec(cpu.Reg.A, value);
-                cpu.Reg.Cf = value > cpu.Reg.A;
+                DoCP(cpu, value);
             }
         ),
         new Instruction(
             "CP A,A", // 0xBF
-            static cpu =>
-            {
-                cpu.Reg.Zf = true;
-                cpu.Reg.Nf = true;
-                cpu.Reg.SetHfForDec(cpu.Reg.A, cpu.Reg.A);
-                cpu.Reg.Cf = false;
-            }
+            static cpu => { DoCP(cpu, cpu.Reg.A); }
         ),
         new Instruction(
             "RET NZ", // 0xC0
             static cpu =>
             {
-                cpu.InternalWait(2);
+                cpu.InternalWait(1);
                 if (cpu.Reg.Zf)
                     return;
                 DoRET(cpu);
@@ -1070,7 +1017,6 @@ public static class Instructions
                 if (cpu.Reg.Zf)
                     return;
                 cpu.Reg.PC = target;
-                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -1078,7 +1024,6 @@ public static class Instructions
             static cpu =>
             {
                 cpu.Reg.PC = cpu.Fetch16();
-                cpu.InternalWait(2);
             }
         ),
         new Instruction(
@@ -1090,14 +1035,14 @@ public static class Instructions
                     return; // No jump.
                 cpu.PushPC();
                 cpu.Reg.PC = addr;
-                cpu.InternalWait(2);
+                cpu.InternalWait(1);
             }
         ),
         new Instruction(
             "PUSH BC", // 0xC5
             static cpu =>
             {
-                cpu.InternalWait(2);
+                cpu.InternalWait(1);
                 cpu.Write8(--cpu.Reg.SP, cpu.Reg.B);
                 cpu.Write8(--cpu.Reg.SP, cpu.Reg.C);
             }
@@ -1110,7 +1055,7 @@ public static class Instructions
             "RST $00", // 0xC7
             static cpu =>
             {
-                cpu.InternalWait(2);
+                cpu.InternalWait(1);
                 cpu.PushPC();
                 cpu.Reg.PC = 0x00;
             }
@@ -1119,7 +1064,7 @@ public static class Instructions
             "RET Z", // 0xC8
             static cpu =>
             {
-                cpu.InternalWait(2);
+                cpu.InternalWait(1);
                 if (!cpu.Reg.Zf)
                     return;
                 DoRET(cpu);
@@ -1137,7 +1082,6 @@ public static class Instructions
                 if (!cpu.Reg.Zf)
                     return;
                 cpu.Reg.PC = target;
-                cpu.InternalWait(2);
             }
         ),
         null, // 0xCB
@@ -1150,7 +1094,7 @@ public static class Instructions
                     return; // No jump.
                 cpu.PushPC();
                 cpu.Reg.PC = addr;
-                cpu.InternalWait(2);
+                cpu.InternalWait(1);
             }
         ),
         new Instruction(
@@ -1160,7 +1104,7 @@ public static class Instructions
                 var addr = cpu.Fetch16();
                 cpu.PushPC();
                 cpu.Reg.PC = addr;
-                cpu.InternalWait(2);
+                cpu.InternalWait(1);
             }
         ),
         new Instruction(
@@ -1171,7 +1115,7 @@ public static class Instructions
             "RST $08", // 0xCF
             static cpu =>
             {
-                cpu.InternalWait(2);
+                cpu.InternalWait(1);
                 cpu.PushPC();
                 cpu.Reg.PC = 0x08;
             }
@@ -1180,7 +1124,7 @@ public static class Instructions
             "RET NC", // 0xD0
             static cpu =>
             {
-                cpu.InternalWait(2);
+                cpu.InternalWait(1);
                 if (cpu.Reg.Cf)
                     return;
                 DoRET(cpu);
@@ -1207,12 +1151,15 @@ public static class Instructions
                 if (cpu.Reg.Cf)
                     return;
                 cpu.Reg.PC = target;
-                cpu.InternalWait(2);
             }
         ),
         new Instruction(
-            "#INV_D3",
-            _ => throw new InvalidOperationException("Invalid instruction.")),
+            "OUT (n),A", // 0xD3 nn
+            static cpu =>
+            {
+                cpu.Fetch8(); // Port number (ignored for now).
+                cpu.InternalWait(4);
+            }),
         new Instruction(
             "CALL NC,a16", // 0xD4 nn nn
             static cpu =>
@@ -1222,14 +1169,14 @@ public static class Instructions
                     return; // No jump.
                 cpu.PushPC();
                 cpu.Reg.PC = addr;
-                cpu.InternalWait(2);
+                cpu.InternalWait(1);
             }
         ),
         new Instruction(
             "PUSH DE", // 0xD5
             static cpu =>
             {
-                cpu.InternalWait(2);
+                cpu.InternalWait(1);
                 cpu.Write8(--cpu.Reg.SP, cpu.Reg.D);
                 cpu.Write8(--cpu.Reg.SP, cpu.Reg.E);
             }
@@ -1242,7 +1189,7 @@ public static class Instructions
             "RST $10", // 0xD7
             static cpu =>
             {
-                cpu.InternalWait(2);
+                cpu.InternalWait(1);
                 cpu.PushPC();
                 cpu.Reg.PC = 0x10;
             }
@@ -1251,19 +1198,19 @@ public static class Instructions
             "RET C", // 0xD8
             static cpu =>
             {
-                cpu.InternalWait(2);
+                cpu.InternalWait(1);
                 if (!cpu.Reg.Cf)
                     return;
                 DoRET(cpu);
             }
         ),
         new Instruction(
-            "RETI", // 0xD9
+            "EXX", // 0xD9
             static cpu =>
             {
-                DoRET(cpu);
-                cpu.TheRegisters.IFF1 = true;
-                cpu.TheRegisters.IFF2 = true;
+                (cpu.Reg.Main.BC, cpu.Reg.Alt.BC) = (cpu.Reg.Alt.BC, cpu.Reg.Main.BC);
+                (cpu.Reg.Main.DE, cpu.Reg.Alt.DE) = (cpu.Reg.Alt.DE, cpu.Reg.Main.DE);
+                (cpu.Reg.Main.HL, cpu.Reg.Alt.HL) = (cpu.Reg.Alt.HL, cpu.Reg.Main.HL);
             }
         ),
         new Instruction(
@@ -1274,12 +1221,15 @@ public static class Instructions
                 if (!cpu.Reg.Cf)
                     return;
                 cpu.Reg.PC = target;
-                cpu.InternalWait(2);
             }
         ),
         new Instruction(
-            "#INV_DB",
-            _ => throw new InvalidOperationException("Invalid instruction.")),
+            "IN A,(n)", // 0xDB nn
+            static cpu =>
+            {
+                cpu.Fetch8(); // Port number (ignored for now).
+                cpu.InternalWait(4);
+            }),
         new Instruction(
             "CALL C,a16", // 0xDC nn nn
             static cpu =>
@@ -1289,7 +1239,7 @@ public static class Instructions
                     return; // No jump.
                 cpu.PushPC();
                 cpu.Reg.PC = addr;
-                cpu.InternalWait(2);
+                cpu.InternalWait(1);
             }
         ),
         new Instruction(
@@ -1303,7 +1253,7 @@ public static class Instructions
             "RST $18", // 0xDF
             static cpu =>
             {
-                cpu.InternalWait(2);
+                cpu.InternalWait(1);
                 cpu.PushPC();
                 cpu.Reg.PC = 0x18;
             }
@@ -1328,8 +1278,18 @@ public static class Instructions
             "#INV_E2",
             _ => throw new InvalidOperationException("Invalid instruction.")),
         new Instruction(
-            "#INV_E3",
-            _ => throw new InvalidOperationException("Invalid instruction.")),
+            "EX (SP),HL", // 0xE3
+            static cpu =>
+            {
+                var sp = cpu.Reg.SP;
+                var lo = cpu.Read8(sp);
+                var hi = cpu.Read8((ushort)(sp + 1));
+                var temp = cpu.Reg.HL;
+                cpu.Write8(sp, (byte)(temp & 0xFF));
+                cpu.Write8((ushort)(sp + 1), (byte)(temp >> 8));
+                cpu.Reg.HL = (ushort)(hi << 8 | lo);
+                cpu.InternalWait(3);
+            }),
         new Instruction(
             "#INV_E4",
             _ => throw new InvalidOperationException("Invalid instruction.")),
@@ -1337,7 +1297,7 @@ public static class Instructions
             "PUSH HL", // 0xE5
             static cpu =>
             {
-                cpu.InternalWait(2);
+                cpu.InternalWait(1);
                 cpu.Write8(--cpu.Reg.SP, cpu.Reg.H);
                 cpu.Write8(--cpu.Reg.SP, cpu.Reg.L);
             }
@@ -1350,7 +1310,7 @@ public static class Instructions
             "RST $20", // 0xE7
             static cpu =>
             {
-                cpu.InternalWait(2);
+                cpu.InternalWait(1);
                 cpu.PushPC();
                 cpu.Reg.PC = 0x20;
             }
@@ -1366,8 +1326,11 @@ public static class Instructions
             "#INV_EA",
             _ => throw new InvalidOperationException("Invalid instruction.")),
         new Instruction(
-            "#INV_EB",
-            _ => throw new InvalidOperationException("Invalid instruction.")),
+            "EX DE,HL", // 0xEB
+            static cpu =>
+            {
+                (cpu.Reg.DE, cpu.Reg.HL) = (cpu.Reg.HL, cpu.Reg.DE);
+            }),
         new Instruction(
             "#INV_EC",
             _ => throw new InvalidOperationException("Invalid instruction.")),
@@ -1382,7 +1345,7 @@ public static class Instructions
             "RST $28", // 0xEF
             static cpu =>
             {
-                cpu.InternalWait(2);
+                cpu.InternalWait(1);
                 cpu.PushPC();
                 cpu.Reg.PC = 0x28;
             }
@@ -1395,16 +1358,12 @@ public static class Instructions
             static cpu =>
             {
                 var sp = cpu.Reg.SP;
-                var restoredF = cpu.Read8(sp);
+                cpu.Reg.F = cpu.Read8(sp);
                 cpu.Reg.SP = (ushort)(sp + 1);
 
                 sp = cpu.Reg.SP;
                 cpu.Reg.A = cpu.Read8(sp);
                 cpu.Reg.SP = (ushort)(sp + 1);
-                cpu.Reg.Zf = (restoredF & 0x80) != 0;
-                cpu.Reg.Nf = (restoredF & 0x40) != 0;
-                cpu.Reg.Hf = (restoredF & 0x20) != 0;
-                cpu.Reg.Cf = (restoredF & 0x10) != 0;
             }
         ),
         new Instruction(
@@ -1425,7 +1384,7 @@ public static class Instructions
             "PUSH AF", // 0xF5
             static cpu =>
             {
-                cpu.InternalWait(2);
+                cpu.InternalWait(1);
                 cpu.Write8(--cpu.Reg.SP, cpu.Reg.A);
                 cpu.Write8(--cpu.Reg.SP, cpu.Reg.F);
             }
@@ -1438,7 +1397,7 @@ public static class Instructions
             "RST $30", // 0xF7
             static cpu =>
             {
-                cpu.InternalWait(2);
+                cpu.InternalWait(1);
                 cpu.PushPC();
                 cpu.Reg.PC = 0x30;
             }
@@ -1474,18 +1433,14 @@ public static class Instructions
             "CP A,nn", // 0xFE nn
             static cpu =>
             {
-                var imm = cpu.Fetch8();
-                cpu.Reg.Zf = cpu.Reg.A == imm;
-                cpu.Reg.Nf = true;
-                cpu.Reg.SetHfForDec(cpu.Reg.A, imm);
-                cpu.Reg.Cf = imm > cpu.Reg.A;
+                DoCP(cpu, cpu.Fetch8());
             }
         ),
         new Instruction(
             "RST $38", // 0xFF
             static cpu =>
             {
-                cpu.InternalWait(2);
+                cpu.InternalWait(1);
                 cpu.PushPC();
                 cpu.Reg.PC = 0x38;
             }
@@ -1498,7 +1453,6 @@ public static class Instructions
         var lo = cpu.Read8(cpu.Reg.SP++);
         var hi = cpu.Read8(cpu.Reg.SP++);
         cpu.Reg.PC = (ushort)(hi << 8 | lo);
-        cpu.InternalWait(2);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1553,5 +1507,13 @@ public static class Instructions
     private static void DoOR(Cpu cpu, byte value)
     {
         cpu.Alu.Or(value);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void DoCP(Cpu cpu, byte value)
+    {
+        cpu.Alu.SubtractAndSetFlags(cpu.Reg.A, value, subCf: false);
+        cpu.Reg.Flag5 = value.IsBitSet(5);
+        cpu.Reg.Flag3 = value.IsBitSet(3);
     }
 }
