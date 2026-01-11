@@ -38,19 +38,12 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool m_isCpuHistoryTracked;
     private readonly Cpu m_cpu;
     private readonly SmsVdp m_vdp;
-    private readonly SmsPortDevice m_portDevice;
     private readonly Lock m_cpuStepLock = new();
     private Thread m_cpuThread;
     private bool m_shutdownRequested;
     private readonly ClockSync m_clockSync;
     private readonly LcdScreen m_screen;
     private long m_lastCpuTStates;
-    private int m_framesRendered;
-    private bool m_displayScanComplete;
-
-    private const int FramesPerSecond = 60;
-    private const int MaxBlackFrames = FramesPerSecond * 5;
-    private const int DisplayScanIntervalFrames = 30;
 
     public MruFiles Mru { get; }
     public IImage Display { get; }
@@ -126,15 +119,14 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         Display = m_screen.Display;
         m_vdp = new SmsVdp();
         m_vdp.FrameRendered += OnFrameRendered;
-        m_portDevice = new SmsPortDevice(m_vdp);
-        m_cpu = new Cpu(new Bus(new Memory(), m_portDevice));
+        var portDevice = new SmsPortDevice(m_vdp);
+        m_cpu = new Cpu(new Bus(new Memory(), portDevice));
         m_clockSync = new ClockSync(GetEffectiveCpuHz, () => m_cpu.TStatesSinceCpuStart, () => m_cpu.Reset());
         Settings.PropertyChanged += OnSettingsPropertyChanged;
         IsCpuHistoryTracked = Settings.IsCpuHistoryTracked;
 #if DEBUG
         m_cpu.InstructionLogger.IsEnabled = IsCpuHistoryTracked;
 #endif
-        ResetDisplayScan();
     }
 
     public void ToggleAmbientBlur()
@@ -262,7 +254,6 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             m_vdp.Reset();
             m_clockSync.Reset();
             m_lastCpuTStates = 0;
-            ResetDisplayScan();
         }
         Logger.Instance.Info("CPU reset.");
     }
@@ -317,7 +308,6 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             m_vdp.Reset();
             m_clockSync.Reset();
             m_lastCpuTStates = 0;
-            ResetDisplayScan();
         }
 
         if (addToMru)
@@ -345,7 +335,6 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         m_shutdownRequested = false;
         m_clockSync.Reset();
         m_lastCpuTStates = m_cpu.TStatesSinceCpuStart;
-        ResetDisplayScan();
         m_cpuThread = new Thread(RunCpuLoop)
         {
             Name = "MasterG33k CPU",
@@ -402,55 +391,6 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         m_screen.Update(frameBuffer);
         DisplayUpdated?.Invoke(this, EventArgs.Empty);
-
-        if (m_displayScanComplete)
-            return;
-
-        m_framesRendered++;
-        if (m_vdp.HasNonBlackPixelThisFrame)
-        {
-            m_displayScanComplete = true;
-            Logger.Instance.Info($"Display scan: non-black pixel detected after {m_framesRendered} frames (CRAM decode).");
-            return;
-        }
-
-        if (m_framesRendered % DisplayScanIntervalFrames != 0 && m_framesRendered < MaxBlackFrames)
-            return;
-
-        if (HasNonBlackPixel(frameBuffer))
-        {
-            m_displayScanComplete = true;
-            Logger.Instance.Info($"Display scan: non-black pixel detected after {m_framesRendered} frames.");
-            return;
-        }
-
-        if (m_framesRendered >= MaxBlackFrames)
-        {
-            m_displayScanComplete = true;
-            Logger.Instance.Warn($"Display scan: no non-black pixels after {MaxBlackFrames} frames (~5s).");
-            Logger.Instance.Warn(m_vdp.GetDebugSummary());
-            Logger.Instance.Warn(m_portDevice.GetDebugSummary());
-        }
-    }
-
-    private void ResetDisplayScan()
-    {
-        m_framesRendered = 0;
-        m_displayScanComplete = false;
-    }
-
-    private static bool HasNonBlackPixel(byte[] frameBuffer)
-    {
-        if (frameBuffer == null)
-            return false;
-
-        for (var i = 0; i + 3 < frameBuffer.Length; i += 4)
-        {
-            if (frameBuffer[i] != 0 || frameBuffer[i + 1] != 0 || frameBuffer[i + 2] != 0)
-                return true;
-        }
-
-        return false;
     }
 
     private static double GetEffectiveCpuHz() =>

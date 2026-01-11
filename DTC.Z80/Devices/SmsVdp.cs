@@ -51,7 +51,6 @@ public sealed class SmsVdp
     private int m_vCounter;
     private byte m_status;
     private bool m_interruptPending;
-    private bool m_hasNonBlackPixelThisFrame;
 
     public event EventHandler<byte[]> FrameRendered;
 
@@ -73,7 +72,6 @@ public sealed class SmsVdp
         m_vCounter = 0;
         m_status = 0;
         m_interruptPending = false;
-        m_hasNonBlackPixelThisFrame = false;
     }
 
     public void AdvanceCycles(long tStates)
@@ -231,7 +229,6 @@ public sealed class SmsVdp
 
     private void RenderFrame()
     {
-        m_hasNonBlackPixelThisFrame = false;
         var nameTableBase = SelectNameTableBase();
         var patternBase = (m_registers[4] & 0x04) << 11;
         var alternatePatternBase = patternBase ^ 0x2000;
@@ -301,8 +298,6 @@ public sealed class SmsVdp
         var r = (byte)((value & 0x03) * 85);
         var g = (byte)(((value >> 2) & 0x03) * 85);
         var b = (byte)(((value >> 4) & 0x03) * 85);
-        if (r != 0 || g != 0 || b != 0)
-            m_hasNonBlackPixelThisFrame = true;
         return (b, g, r);
     }
 
@@ -316,7 +311,6 @@ public sealed class SmsVdp
         return (b, g, r);
     }
 
-    public bool HasNonBlackPixelThisFrame => m_hasNonBlackPixelThisFrame;
 
     /// <summary>
     /// Dump the current frame buffer to disk (.tga).
@@ -429,7 +423,10 @@ public sealed class SmsVdp
     private void RenderSprites()
     {
         var spriteTableBase = (m_registers[5] & 0x7E) << 7;
+        var spritePatternBase = (m_registers[6] & 0x04) << 11;
         var spriteHeight = (m_registers[1] & 0x02) != 0 ? 16 : 8;
+        var zoom = m_registers[1].IsBitSet(0);
+        var spriteShift = m_registers[0].IsBitSet(3) ? -8 : 0;
 
         for (var i = 0; i < 64; i++)
         {
@@ -442,32 +439,65 @@ public sealed class SmsVdp
                 continue;
 
             var entryBase = (spriteTableBase + 0x80 + i * 2) & 0x3FFF;
-            var spriteX = (int)m_vram[entryBase];
-            if (spriteX >= FrameWidth)
-                continue;
+            var spriteX = m_vram[entryBase] + spriteShift;
+            var tileIndex = m_vram[(entryBase + 1) & 0x3FFF];
+            if (spriteHeight == 16)
+                tileIndex &= 0xFE;
 
-            DrawSolidSprite(spriteX, spriteY, spriteHeight);
+            DrawSprite(spriteX, spriteY, tileIndex, spriteHeight, spritePatternBase, zoom);
         }
     }
 
-    private void DrawSolidSprite(int x, int y, int height)
+    private void DrawSprite(int x, int y, int tileIndex, int height, int patternBase, bool zoom)
     {
-        const byte r = 255;
-        const byte g = 64;
-        const byte b = 255;
+        if (x >= FrameWidth || y >= FrameHeight)
+            return;
 
-        var maxY = Math.Min(FrameHeight, y + height);
-        var maxX = Math.Min(FrameWidth, x + 8);
-        for (var py = y; py < maxY; py++)
+        var scale = zoom ? 2 : 1;
+        for (var row = 0; row < height; row++)
         {
-            var rowOffset = (py * FrameWidth + x) * 4;
-            for (var px = x; px < maxX; px++)
+            var tileOffset = row >= 8 ? 1 : 0;
+            var rowInTile = row & 7;
+            var tileBase = (patternBase + (tileIndex + tileOffset) * 32) & 0x3FFF;
+            var rowAddr = (tileBase + rowInTile * 4) & 0x3FFF;
+            var plane0 = m_vram[rowAddr];
+            var plane1 = m_vram[(rowAddr + 1) & 0x3FFF];
+            var plane2 = m_vram[(rowAddr + 2) & 0x3FFF];
+            var plane3 = m_vram[(rowAddr + 3) & 0x3FFF];
+
+            var destY = y + row * scale;
+            if (destY >= FrameHeight)
+                break;
+
+            for (var col = 0; col < 8; col++)
             {
-                var offset = rowOffset + (px - x) * 4;
-                m_frameBuffer[offset] = b;
-                m_frameBuffer[offset + 1] = g;
-                m_frameBuffer[offset + 2] = r;
-                m_frameBuffer[offset + 3] = 255;
+                var bit = 7 - col;
+                var colorIndex = ((plane0 >> bit) & 0x01) |
+                                 (((plane1 >> bit) & 0x01) << 1) |
+                                 (((plane2 >> bit) & 0x01) << 2) |
+                                 (((plane3 >> bit) & 0x01) << 3);
+                if (colorIndex == 0)
+                    continue;
+
+                var (b, g, r) = DecodeColor(1, colorIndex);
+                var destX = x + col * scale;
+                if (destX < 0 || destX >= FrameWidth)
+                    continue;
+
+                var maxY = Math.Min(FrameHeight, destY + scale);
+                var maxX = Math.Min(FrameWidth, destX + scale);
+                for (var py = destY; py < maxY; py++)
+                {
+                    var rowOffset = (py * FrameWidth + destX) * 4;
+                    for (var px = destX; px < maxX; px++)
+                    {
+                        var offset = rowOffset + (px - destX) * 4;
+                        m_frameBuffer[offset] = b;
+                        m_frameBuffer[offset + 1] = g;
+                        m_frameBuffer[offset + 2] = r;
+                        m_frameBuffer[offset + 3] = 255;
+                    }
+                }
             }
         }
     }
