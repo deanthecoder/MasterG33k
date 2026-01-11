@@ -23,16 +23,6 @@ public sealed class SmsPortDevice : IPortDevice
     private readonly SmsVdp m_vdp;
     private readonly SmsJoypad m_joypad;
     private readonly IPortDevice m_fallback;
-    private int m_dataWrites;
-    private int m_controlWrites;
-    private int m_dataReads;
-    private int m_controlReads;
-    private int m_otherReads;
-    private int m_otherWrites;
-    private int m_beWrites;
-    private int m_bfWrites;
-    private int m_bcWrites;
-    private int m_bdWrites;
 
     public SmsPortDevice(SmsVdp vdp, SmsJoypad joypad = null, IPortDevice fallback = null)
     {
@@ -48,11 +38,9 @@ public sealed class SmsPortDevice : IPortDevice
         {
             case 0xBE:
             case 0xBC:
-                m_dataReads++;
                 return m_vdp.ReadData();
             case 0xBF:
             case 0xBD:
-                m_controlReads++;
                 return m_vdp.ReadStatus();
             case 0x7E:
                 return m_vdp.ReadVCounter();
@@ -62,7 +50,6 @@ public sealed class SmsPortDevice : IPortDevice
             case 0xDD:
                 return ReadJoypad();
             default:
-                m_otherReads++;
                 return m_fallback.Read8(portAddress);
         }
     }
@@ -73,27 +60,18 @@ public sealed class SmsPortDevice : IPortDevice
         switch (port)
         {
             case 0xBE:
-                m_beWrites++;
-                m_dataWrites++;
                 m_vdp.WriteData(value);
                 return;
             case 0xBC:
-                m_bcWrites++;
-                m_dataWrites++;
                 m_vdp.WriteData(value);
                 return;
             case 0xBF:
-                m_bfWrites++;
-                m_controlWrites++;
                 m_vdp.WriteControl(value);
                 return;
             case 0xBD:
-                m_bdWrites++;
-                m_controlWrites++;
                 m_vdp.WriteControl(value);
                 return;
             default:
-                m_otherWrites++;
                 m_fallback.Write8(portAddress, value);
                 return;
         }
@@ -119,9 +97,4 @@ public sealed class SmsPortDevice : IPortDevice
 
         return value;
     }
-
-    public string GetDebugSummary() =>
-        $"Ports: dataR={m_dataReads}, dataW={m_dataWrites} (BE={m_beWrites}, BC={m_bcWrites}) " +
-        $"ctrlR={m_controlReads}, ctrlW={m_controlWrites} (BF={m_bfWrites}, BD={m_bdWrites}) " +
-        $"otherR={m_otherReads}, otherW={m_otherWrites}";
 }
