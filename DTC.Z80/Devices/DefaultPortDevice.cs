@@ -9,11 +9,14 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
-namespace DTC.Z80;
+namespace DTC.Z80.Devices;
 
 /// <summary>
 /// Default port device that returns the upper address byte (suitable for Fuse tests).
 /// </summary>
+/// <remarks>
+/// Acts as a stub for unmapped I/O by mirroring the high port byte on reads.
+/// </remarks>
 public sealed class DefaultPortDevice : IPortDevice
 {
     public static DefaultPortDevice Instance { get; } = new();

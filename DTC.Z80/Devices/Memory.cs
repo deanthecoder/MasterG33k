@@ -8,11 +8,14 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
-namespace DTC.Z80;
+namespace DTC.Z80.Devices;
 
 /// <summary>
 /// Simple linear RAM device.
 /// </summary>
+/// <remarks>
+/// Provides flat read/write storage for the full 64K address space by default.
+/// </remarks>
 public sealed class Memory : IMemDevice
 {
     public byte[] Data { get; }

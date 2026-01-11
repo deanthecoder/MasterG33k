@@ -9,11 +9,14 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
-namespace DTC.Z80;
+namespace DTC.Z80.Devices;
 
 /// <summary>
 /// Simple ROM device for a Master System BIOS image.
 /// </summary>
+/// <remarks>
+/// Maps a read-only ROM blob into a fixed address range.
+/// </remarks>
 public sealed class BiosRomDevice : IMemDevice
 {
     private readonly byte[] m_data;

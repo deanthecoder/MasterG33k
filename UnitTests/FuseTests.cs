@@ -12,6 +12,7 @@
 using CSharp.Core.Extensions;
 using CSharp.Core.UnitTesting;
 using DTC.Z80;
+using DTC.Z80.Devices;
 using UnitTests.FuseUtils;
 
 namespace UnitTests;

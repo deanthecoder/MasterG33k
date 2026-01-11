@@ -9,11 +9,14 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
-namespace DTC.Z80;
+namespace DTC.Z80.Devices;
 
 /// <summary>
 /// Mapper-backed ROM device for Sega Master System cartridges or BIOS+game images.
 /// </summary>
+/// <remarks>
+/// Exposes a banked 0x0000-0xBFFF ROM window controlled by mapper registers.
+/// </remarks>
 public sealed class SmsRomDevice : IMemDevice
 {
     private const int BankSize = 0x4000;

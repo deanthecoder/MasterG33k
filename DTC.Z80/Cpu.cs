@@ -8,6 +8,8 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using DTC.Z80.Devices;
+
 namespace DTC.Z80;
 
 /// <summary>
@@ -15,6 +17,8 @@ namespace DTC.Z80;
 /// </summary>
 public sealed class Cpu
 {
+    private bool m_interruptPending;
+
     public Registers Reg { get; }
     public Registers TheRegisters { get; }
     public InstructionLogger InstructionLogger { get; } = new();
@@ -51,6 +55,7 @@ public sealed class Cpu
         {
             TheRegisters.IncrementR();
             InternalWait(4);
+            ServiceInterrupts();
             return;
         }
 
@@ -72,6 +77,32 @@ public sealed class Cpu
             InstructionLogger.Write(() => $"{disassembly,-19}|{preRegState,-32}|{preFlags}");
         }
         instruction?.Execute(this);
+        ServiceInterrupts();
+    }
+
+    public void RequestInterrupt() => m_interruptPending = true;
+
+    private void ServiceInterrupts()
+    {
+        if (!m_interruptPending)
+            return;
+
+        if (!Reg.IFF1)
+            return;
+
+        m_interruptPending = false;
+        Reg.IFF1 = false;
+        Reg.IFF2 = false;
+        IsHalted = false;
+
+        PushPC();
+        Reg.PC = Reg.IM switch
+        {
+            2 => (ushort)((Reg.I << 8) | 0xFF),
+            _ => 0x0038
+        };
+
+        InternalWait(7);
     }
 
     public byte Fetch8()

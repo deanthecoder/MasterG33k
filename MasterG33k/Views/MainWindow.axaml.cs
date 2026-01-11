@@ -8,16 +8,21 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using System;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using CSharp.Core;
+using MasterG33k.ViewModels;
 
 namespace MasterG33k.Views;
 
 public partial class MainWindow : Window
 {
     private bool m_isLoaded;
+    private MainWindowViewModel ViewModel => (MainWindowViewModel)DataContext;
 
     public MainWindow()
     {
@@ -39,6 +44,22 @@ public partial class MainWindow : Window
         m_isLoaded = true;
 
         Logger.Instance.Info("Window loaded.");
+
+        var action = new Action(() =>
+        {
+            AmbientDisplay.InvalidateVisual();
+            MainDisplay.InvalidateVisual();
+        });
+        ViewModel.DisplayUpdated += (_, _) =>
+        {
+            try
+            {
+                Dispatcher.UIThread.InvokeAsync(action);
+            }
+            catch (TaskCanceledException)
+            {
+            }
+        };
     }
 
     private static void OnPreviewKeyDown(object sender, KeyEventArgs e)

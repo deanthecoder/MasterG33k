@@ -14,6 +14,9 @@ namespace DTC.Z80;
 /// <summary>
 /// Represents a port-mapped device.
 /// </summary>
+/// <remarks>
+/// Implementations translate 8-bit I/O port accesses to device behavior.
+/// </remarks>
 public interface IPortDevice
 {
     byte Read8(ushort portAddress);

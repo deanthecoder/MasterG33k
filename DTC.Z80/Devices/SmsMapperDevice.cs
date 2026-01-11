@@ -9,11 +9,14 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
-namespace DTC.Z80;
+namespace DTC.Z80.Devices;
 
 /// <summary>
 /// Mapper register device for Sega Master System ROM banking.
 /// </summary>
+/// <remarks>
+/// Provides the 0xFFFC-0xFFFF control registers that select ROM banks.
+/// </remarks>
 public sealed class SmsMapperDevice : IMemDevice
 {
     private readonly SmsRomDevice m_rom;

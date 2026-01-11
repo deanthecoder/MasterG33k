@@ -1,0 +1,435 @@
+// Code authored by Dean Edis (DeanTheCoder).
+// Anyone is free to copy, modify, use, compile, or distribute this software,
+// either in source code form or as a compiled binary, for any purpose.
+//
+// If you modify the code, please retain this copyright header,
+// and consider contributing back to the repository or letting us know
+// about your modifications. Your contributions are valued!
+//
+// THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
+
+namespace DTC.Z80.Devices;
+
+/// <summary>
+/// Minimal Sega Master System VDP implementation for BIOS bring-up.
+/// </summary>
+/// <remarks>
+/// Handles VRAM/CRAM access, basic VBlank timing, and a simple background/sprite renderer.
+/// </remarks>
+public sealed class SmsVdp
+{
+    public const int FrameWidth = 256;
+    public const int FrameHeight = 192;
+
+    private const int VramSize = 0x4000;
+    private const int CramSize = 32;
+    private const int RegisterCount = 16;
+    private const int CyclesPerScanline = 228;
+    private const int TotalScanlines = 262;
+    private const int VblankStartLine = 192;
+    private const byte StatusVblankBit = 0x80;
+
+    private readonly byte[] m_vram = new byte[VramSize];
+    private readonly byte[] m_cram = new byte[CramSize];
+    private readonly byte[] m_registers = new byte[RegisterCount];
+    private readonly byte[] m_frameBuffer = new byte[FrameWidth * FrameHeight * 4];
+
+    private ushort m_address;
+    private byte m_controlLatchLow;
+    private bool m_isControlLatchFull;
+    private AccessMode m_accessMode = AccessMode.VramRead;
+    private int m_vramWrites;
+    private int m_cramWrites;
+    private int m_registerWrites;
+    private int m_controlWrites;
+
+    private int m_cycleAccumulator;
+    private int m_vCounter;
+    private byte m_status;
+    private bool m_interruptPending;
+    private bool m_hasNonBlackPixelThisFrame;
+
+    public event EventHandler<byte[]> FrameRendered;
+
+    public void Reset()
+    {
+        Array.Clear(m_vram, 0, m_vram.Length);
+        Array.Clear(m_cram, 0, m_cram.Length);
+        Array.Clear(m_registers, 0, m_registers.Length);
+        Array.Clear(m_frameBuffer, 0, m_frameBuffer.Length);
+        m_address = 0;
+        m_controlLatchLow = 0;
+        m_isControlLatchFull = false;
+        m_accessMode = AccessMode.VramRead;
+        m_vramWrites = 0;
+        m_cramWrites = 0;
+        m_registerWrites = 0;
+        m_controlWrites = 0;
+        m_cycleAccumulator = 0;
+        m_vCounter = 0;
+        m_status = 0;
+        m_interruptPending = false;
+        m_hasNonBlackPixelThisFrame = false;
+    }
+
+    public void AdvanceCycles(long tStates)
+    {
+        m_cycleAccumulator += (int)tStates;
+        while (m_cycleAccumulator >= CyclesPerScanline)
+        {
+            m_cycleAccumulator -= CyclesPerScanline;
+            AdvanceScanline();
+        }
+    }
+
+    public byte ReadData() => m_accessMode == AccessMode.VramRead
+        ? ReadVram()
+        : (byte)0;
+
+    public void WriteData(byte value)
+    {
+        switch (m_accessMode)
+        {
+            case AccessMode.VramWrite:
+                m_vram[m_address & 0x3FFF] = value;
+                m_address = (ushort)((m_address + 1) & 0x3FFF);
+                m_vramWrites++;
+                break;
+            case AccessMode.CramWrite:
+                m_cram[m_address & 0x1F] = value;
+                m_address = (ushort)((m_address + 1) & 0x1F);
+                m_cramWrites++;
+                break;
+        }
+    }
+
+    public byte ReadStatus()
+    {
+        var status = m_status;
+        m_status &= unchecked((byte)~StatusVblankBit);
+        m_isControlLatchFull = false;
+        m_interruptPending = false;
+        return status;
+    }
+
+    public byte ReadVCounter() => (byte)m_vCounter;
+
+    public byte ReadHCounter() => 0;
+
+    public void WriteControl(byte value)
+    {
+        if (!m_isControlLatchFull)
+        {
+            m_controlLatchLow = value;
+            m_isControlLatchFull = true;
+            return;
+        }
+
+        var high = value;
+        var command = (byte)(high >> 6);
+        m_controlWrites++;
+        if (command == 0b10)
+        {
+            var regIndex = high & 0x0F;
+            if (regIndex < m_registers.Length)
+            {
+                m_registers[regIndex] = m_controlLatchLow;
+                m_registerWrites++;
+            }
+        }
+        else
+        {
+            m_address = (ushort)((m_controlLatchLow | ((high & 0x3F) << 8)) & 0x3FFF);
+            m_accessMode = command switch
+            {
+                0b00 => AccessMode.VramRead,
+                0b01 => AccessMode.VramWrite,
+                0b11 => AccessMode.CramWrite,
+                _ => m_accessMode
+            };
+        }
+
+        m_isControlLatchFull = false;
+    }
+
+    public string GetDebugSummary()
+    {
+        var nonZeroVram = 0;
+        for (var i = 0; i < m_vram.Length; i++)
+            if (m_vram[i] != 0)
+                nonZeroVram++;
+
+        var nonZeroCram = 0;
+        for (var i = 0; i < m_cram.Length; i++)
+            if (m_cram[i] != 0)
+                nonZeroCram++;
+
+        var nameTableBase = SelectNameTableBase();
+        var primaryPatternBase = (m_registers[4] & 0x04) << 11;
+        var alternatePatternBase = primaryPatternBase ^ 0x2000;
+        var (primaryHits, alternateHits, maxTile) = CountPatternHits(nameTableBase, primaryPatternBase, alternatePatternBase);
+        var nameEntries = 0;
+        var nonZeroEntries = 0;
+        Span<byte> nameSample = stackalloc byte[16];
+        for (var i = 0; i < 16; i++)
+            nameSample[i] = m_vram[(nameTableBase + i) & 0x3FFF];
+
+        for (var i = 0; i < 32 * 28; i++)
+        {
+            var addr = (nameTableBase + i * 2) & 0x3FFF;
+            var low = m_vram[addr];
+            var high = m_vram[(addr + 1) & 0x3FFF];
+            if (low != 0 || high != 0)
+                nonZeroEntries++;
+            nameEntries++;
+        }
+
+        return $"VDP writes: VRAM={m_vramWrites}, CRAM={m_cramWrites}, REG={m_registerWrites}, CTRL={m_controlWrites} | " +
+               $"VRAM non-zero={nonZeroVram}, CRAM non-zero={nonZeroCram}, Name entries={nonZeroEntries}/{nameEntries} | " +
+               $"R1={m_registers[1]:X2} R2={m_registers[2]:X2} R4={m_registers[4]:X2} R5={m_registers[5]:X2} " +
+               $"R8={m_registers[8]:X2} R9={m_registers[9]:X2} Addr={m_address:X4} Mode={m_accessMode} | " +
+               $"NameBase=0x{nameTableBase:X4} Sample={Convert.ToHexString(nameSample)} | " +
+               $"PatternBase=0x{primaryPatternBase:X4}/0x{alternatePatternBase:X4} Hits={primaryHits}/{alternateHits} MaxTile={maxTile}";
+    }
+
+    private void AdvanceScanline()
+    {
+        m_vCounter++;
+        if (m_vCounter == VblankStartLine)
+        {
+            m_status |= StatusVblankBit;
+            if ((m_registers[1] & 0x20) != 0)
+                m_interruptPending = true;
+            RenderFrame();
+            FrameRendered?.Invoke(this, m_frameBuffer);
+        }
+        else if (m_vCounter >= TotalScanlines)
+        {
+            m_vCounter = 0;
+        }
+    }
+
+    public bool TryConsumeInterrupt()
+    {
+        if (!m_interruptPending)
+            return false;
+
+        m_interruptPending = false;
+        return true;
+    }
+
+    private byte ReadVram()
+    {
+        var value = m_vram[m_address & 0x3FFF];
+        m_address = (ushort)((m_address + 1) & 0x3FFF);
+        return value;
+    }
+
+    private void RenderFrame()
+    {
+        m_hasNonBlackPixelThisFrame = false;
+        var nameTableBase = SelectNameTableBase();
+        var patternBase = (m_registers[4] & 0x04) << 11;
+        var alternatePatternBase = patternBase ^ 0x2000;
+        patternBase = SelectPatternBase(nameTableBase, patternBase, alternatePatternBase);
+        var scrollX = m_registers[8];
+        var scrollY = m_registers[9];
+
+        for (var y = 0; y < FrameHeight; y++)
+        {
+            var sourceY = (y + scrollY) & 0xFF;
+            var tileY = sourceY >> 3;
+            var rowInTile = sourceY & 7;
+            var rowBase = tileY * 32;
+            for (var x = 0; x < FrameWidth; x++)
+            {
+                var sourceX = (x + scrollX) & 0xFF;
+                var tileX = sourceX >> 3;
+                var colInTile = sourceX & 7;
+
+                var entryAddr = (nameTableBase + (rowBase + tileX) * 2) & 0x3FFF;
+                var low = m_vram[entryAddr];
+                var high = m_vram[(entryAddr + 1) & 0x3FFF];
+
+                var tileIndex = low | ((high & 0x01) << 8);
+                var hFlip = (high & 0x04) != 0;
+                var vFlip = (high & 0x08) != 0;
+                var palette = (high & 0x10) != 0 ? 1 : 0;
+
+                var tileBase = (patternBase + tileIndex * 32) & 0x3FFF;
+                var sourceRow = vFlip ? 7 - rowInTile : rowInTile;
+                var rowAddr = (tileBase + sourceRow * 4) & 0x3FFF;
+                var plane0 = m_vram[rowAddr];
+                var plane1 = m_vram[(rowAddr + 1) & 0x3FFF];
+                var plane2 = m_vram[(rowAddr + 2) & 0x3FFF];
+                var plane3 = m_vram[(rowAddr + 3) & 0x3FFF];
+
+                var bit = hFlip ? colInTile : 7 - colInTile;
+                var colorIndex = ((plane0 >> bit) & 0x01) |
+                                 (((plane1 >> bit) & 0x01) << 1) |
+                                 (((plane2 >> bit) & 0x01) << 2) |
+                                 (((plane3 >> bit) & 0x01) << 3);
+
+                var (b, g, r) = DecodeColor(palette, colorIndex);
+                var pixelOffset = (y * FrameWidth + x) * 4;
+                m_frameBuffer[pixelOffset] = b;
+                m_frameBuffer[pixelOffset + 1] = g;
+                m_frameBuffer[pixelOffset + 2] = r;
+                m_frameBuffer[pixelOffset + 3] = 255;
+            }
+        }
+
+        RenderSprites();
+    }
+
+    private (byte b, byte g, byte r) DecodeColor(int palette, int colorIndex)
+    {
+        var cramIndex = (palette * 16 + colorIndex) & 0x1F;
+        var value = m_cram[cramIndex];
+
+        var r = (byte)((value & 0x03) * 85);
+        var g = (byte)(((value >> 2) & 0x03) * 85);
+        var b = (byte)(((value >> 4) & 0x03) * 85);
+        if (r != 0 || g != 0 || b != 0)
+            m_hasNonBlackPixelThisFrame = true;
+        return (b, g, r);
+    }
+
+    public bool HasNonBlackPixelThisFrame => m_hasNonBlackPixelThisFrame;
+
+    private int SelectNameTableBase()
+    {
+        Span<int> bases = stackalloc int[4];
+        bases[0] = (m_registers[2] & 0x0E) << 10;
+        bases[1] = (m_registers[2] & 0x0F) << 10;
+        bases[2] = 0x3800;
+        bases[3] = 0x3C00;
+
+        var bestBase = bases[0];
+        var bestCount = -1;
+        for (var i = 0; i < bases.Length; i++)
+        {
+            var candidate = bases[i] & 0x3FFF;
+            var count = CountNonZeroNameEntries(candidate);
+            if (count > bestCount)
+            {
+                bestCount = count;
+                bestBase = candidate;
+            }
+        }
+
+        return bestBase;
+    }
+
+    private int CountNonZeroNameEntries(int baseAddr)
+    {
+        var count = 0;
+        for (var i = 0; i < 32 * 28; i++)
+        {
+            var addr = (baseAddr + i * 2) & 0x3FFF;
+            if (m_vram[addr] != 0 || m_vram[(addr + 1) & 0x3FFF] != 0)
+                count++;
+        }
+
+        return count;
+    }
+
+    private bool HasTileData(int baseAddr, int tileIndex)
+    {
+        var start = (baseAddr + tileIndex * 32) & 0x3FFF;
+        for (var i = 0; i < 32; i++)
+        {
+            if (m_vram[(start + i) & 0x3FFF] != 0)
+                return true;
+        }
+
+        return false;
+    }
+
+    private int SelectPatternBase(int nameTableBase, int primaryBase, int alternateBase)
+    {
+        var (primaryHits, alternateHits, _) = CountPatternHits(nameTableBase, primaryBase, alternateBase);
+        return alternateHits > primaryHits ? alternateBase : primaryBase;
+    }
+
+    private (int primaryHits, int alternateHits, int maxTile) CountPatternHits(int nameTableBase, int primaryBase, int alternateBase)
+    {
+        var primaryHits = 0;
+        var alternateHits = 0;
+        var maxTile = 0;
+
+        for (var i = 0; i < 32 * 28; i++)
+        {
+            var addr = (nameTableBase + i * 2) & 0x3FFF;
+            var low = m_vram[addr];
+            var high = m_vram[(addr + 1) & 0x3FFF];
+            if (low == 0 && high == 0)
+                continue;
+
+            var tileIndex = low | ((high & 0x01) << 8);
+            if (tileIndex > maxTile)
+                maxTile = tileIndex;
+
+            if (HasTileData(primaryBase, tileIndex))
+                primaryHits++;
+            if (HasTileData(alternateBase, tileIndex))
+                alternateHits++;
+        }
+
+        return (primaryHits, alternateHits, maxTile);
+    }
+
+
+    private void RenderSprites()
+    {
+        var spriteTableBase = (m_registers[5] & 0x7E) << 7;
+        var spriteHeight = (m_registers[1] & 0x02) != 0 ? 16 : 8;
+
+        for (var i = 0; i < 64; i++)
+        {
+            var y = m_vram[(spriteTableBase + i) & 0x3FFF];
+            if (y == 0xD0)
+                break;
+
+            var spriteY = (y + 1) & 0xFF;
+            if (spriteY >= FrameHeight)
+                continue;
+
+            var entryBase = (spriteTableBase + 0x80 + i * 2) & 0x3FFF;
+            var spriteX = (int)m_vram[entryBase];
+            if (spriteX >= FrameWidth)
+                continue;
+
+            DrawSolidSprite(spriteX, spriteY, spriteHeight);
+        }
+    }
+
+    private void DrawSolidSprite(int x, int y, int height)
+    {
+        const byte r = 255;
+        const byte g = 64;
+        const byte b = 255;
+
+        var maxY = Math.Min(FrameHeight, y + height);
+        var maxX = Math.Min(FrameWidth, x + 8);
+        for (var py = y; py < maxY; py++)
+        {
+            var rowOffset = (py * FrameWidth + x) * 4;
+            for (var px = x; px < maxX; px++)
+            {
+                var offset = rowOffset + (px - x) * 4;
+                m_frameBuffer[offset] = b;
+                m_frameBuffer[offset + 1] = g;
+                m_frameBuffer[offset + 2] = r;
+                m_frameBuffer[offset + 3] = 255;
+            }
+        }
+    }
+
+    private enum AccessMode : byte
+    {
+        VramRead = 0,
+        VramWrite = 1,
+        CramWrite = 3
+    }
+}

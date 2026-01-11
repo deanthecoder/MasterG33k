@@ -14,6 +14,9 @@ namespace DTC.Z80;
 /// <summary>
 /// Represents a memory-mapped device.
 /// </summary>
+/// <remarks>
+/// Implementations expose a fixed address range for reads/writes.
+/// </remarks>
 public interface IMemDevice
 {
     ushort FromAddr { get; }
