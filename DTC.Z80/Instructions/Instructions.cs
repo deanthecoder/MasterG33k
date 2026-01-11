@@ -1257,8 +1257,14 @@ public static class Instructions
             }
         ),
         new Instruction(
-            "#INV_DD",
-            _ => throw new InvalidOperationException("Invalid instruction.")),
+            "PREFIX DD", // 0xDD
+            static cpu =>
+            {
+                var ddOpcode = cpu.FetchOpcode8();
+                if (cpu.InstructionLogger.IsEnabled)
+                    cpu.InstructionLogger.Write(() => $"DD {ddOpcode:X2}");
+                IndexInstructions.Execute(cpu, useIX: true, ddOpcode);
+            }),
         new Instruction(
             "SBC A,nn", // 0xDE nn
             static cpu => { DoSBC(cpu, cpu.Fetch8()); }
@@ -1540,8 +1546,14 @@ public static class Instructions
             }
         ),
         new Instruction(
-            "#INV_FD",
-            _ => throw new InvalidOperationException("Invalid instruction.")),
+            "PREFIX FD", // 0xFD
+            static cpu =>
+            {
+                var fdOpcode = cpu.FetchOpcode8();
+                if (cpu.InstructionLogger.IsEnabled)
+                    cpu.InstructionLogger.Write(() => $"FD {fdOpcode:X2}");
+                IndexInstructions.Execute(cpu, useIX: false, fdOpcode);
+            }),
         new Instruction(
             "CP A,nn", // 0xFE nn
             static cpu =>
