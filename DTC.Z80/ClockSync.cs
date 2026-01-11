@@ -78,6 +78,7 @@ public class ClockSync
 
     public void Reset()
     {
+        m_resyncRequested = true;
         lock (m_lock)
         {
             m_realTime.Restart();
