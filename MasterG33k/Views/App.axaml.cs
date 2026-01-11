@@ -14,6 +14,8 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using CSharp.Core;
+using CSharp.Core.Extensions;
 using CSharp.Core.UI;
 using DialogHostAvalonia;
 using Material.Icons;
@@ -49,24 +51,29 @@ public class App : Application
                 viewModel.Dispose();
                 Settings.Instance.Dispose();
             };
-            mainWindow.Opened += (_, _) => EnsureBiosAvailable(desktop);
+            mainWindow.Opened += (_, _) => EnsureBiosAvailable(desktop, viewModel);
         }
 
         base.OnFrameworkInitializationCompleted();
     }
 
-    private static void EnsureBiosAvailable(IClassicDesktopStyleApplicationLifetime desktop)
+    private static void EnsureBiosAvailable(IClassicDesktopStyleApplicationLifetime desktop, MainWindowViewModel viewModel)
     {
-        var biosFolder = Path.Combine(AppContext.BaseDirectory, "BIOS");
-        var hasBios = Directory.Exists(biosFolder) &&
-                      Directory.EnumerateFiles(biosFolder, "*.sms").Any();
-        if (hasBios)
+        var biosDir = new DirectoryInfo(AppContext.BaseDirectory).GetDir("BIOS");
+        var biosFile = biosDir.Exists
+            ? biosDir.EnumerateFiles("*.sms").FirstOrDefault()
+            : null;
+        if (biosFile != null)
+        {
+            viewModel.LoadBios(biosFile);
             return;
+        }
 
+        Logger.Instance.Warn($"No Master System BIOS ROM found in '{biosDir.FullName}'. Shutting down.");
         DialogHost.Show(new MessageDialog
             {
                 Message = "No Master System BIOS ROM found.",
-                Detail = $"Copy your Sega Master System BIOS ROM (.sms) into:\n{biosFolder}",
+                Detail = $"Copy your Sega Master System BIOS ROM (.sms) into:\n{biosDir.FullName}",
                 Icon = MaterialIconKind.AlertCircleOutline
             },
             (DialogClosingEventHandler)((_, _) => desktop.Shutdown()));

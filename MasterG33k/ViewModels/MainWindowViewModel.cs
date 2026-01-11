@@ -12,6 +12,7 @@ using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using Avalonia;
@@ -147,6 +148,57 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public void CloseCommand() => Application.Current.GetMainWindow().Close();
 
     public void SaveScreenshot() => Logger.Instance.Info("Screenshot export is not implemented yet.");
+
+    public void LoadBios(FileInfo biosFile)
+    {
+        if (biosFile == null)
+            throw new ArgumentNullException(nameof(biosFile));
+        if (!biosFile.Exists)
+        {
+            Logger.Instance.Warn($"BIOS file '{biosFile.FullName}' was not found.");
+            return;
+        }
+
+        var biosData = biosFile.ReadAllBytes();
+        if (biosData.Length > 0x4000)
+        {
+            var romDevice = new SmsRomDevice(biosData);
+            m_cpu.Bus.Attach(romDevice);
+            m_cpu.Bus.Attach(new SmsMapperDevice(romDevice));
+            LogRomInfo(biosFile, biosData, romDevice.BankCount);
+            return;
+        }
+
+        m_cpu.Bus.Attach(new BiosRomDevice(biosData));
+        LogRomInfo(biosFile, biosData, bankCount: 1);
+    }
+
+    private static void LogRomInfo(FileInfo romFile, byte[] romData, int bankCount)
+    {
+        var name = romFile.LeafName();
+        var headerOffset = FindSmsHeaderOffset(romData);
+        var manufacturer = headerOffset >= 0 ? "SEGA" : "Unknown";
+        var headerInfo = headerOffset >= 0 ? $"Header @ 0x{headerOffset:X4}" : "Header not found";
+        var sizeKb = romData.Length / 1024.0;
+        Logger.Instance.Info($"ROM loaded: {name} ({sizeKb:0.#} KB, Banks={bankCount}, Maker={manufacturer}, {headerInfo})");
+    }
+
+    private static int FindSmsHeaderOffset(byte[] romData)
+    {
+        if (romData == null || romData.Length < 8)
+            return -1;
+
+        var signature = "TMR SEGA"u8.ToArray();
+        var max = romData.Length - signature.Length;
+        for (var i = 0; i <= max; i++)
+        {
+            var match = !signature.Where((t, j) => romData[i + j] != t).Any();
+            if (match)
+                return i;
+        }
+
+        return -1;
+    }
 
     public void SaveSnapshot() => Logger.Instance.Info("Snapshots are not implemented yet.");
 
