@@ -10,6 +10,8 @@
 
 using CSharp.Core.Image;
 
+using CSharp.Core.Extensions;
+
 namespace DTC.Z80.Devices;
 
 /// <summary>
@@ -254,9 +256,9 @@ public sealed class SmsVdp
                 var high = m_vram[(entryAddr + 1) & 0x3FFF];
 
                 var tileIndex = low | ((high & 0x01) << 8);
-                var hFlip = (high & 0x04) != 0;
-                var vFlip = (high & 0x08) != 0;
-                var palette = (high & 0x10) != 0 ? 1 : 0;
+                var hFlip = high.IsBitSet(1);
+                var vFlip = high.IsBitSet(2);
+                var palette = high.IsBitSet(3) ? 1 : 0;
 
                 var tileBase = (patternBase + tileIndex * 32) & 0x3FFF;
                 var sourceRow = vFlip ? 7 - rowInTile : rowInTile;
@@ -273,6 +275,13 @@ public sealed class SmsVdp
                                  (((plane3 >> bit) & 0x01) << 3);
 
                 var (b, g, r) = DecodeColor(palette, colorIndex);
+                if (colorIndex == 0)
+                {
+                    var (bb, bg, br) = DecodeBackdropColor();
+                    b = bb;
+                    g = bg;
+                    r = br;
+                }
                 var pixelOffset = (y * FrameWidth + x) * 4;
                 m_frameBuffer[pixelOffset] = b;
                 m_frameBuffer[pixelOffset + 1] = g;
@@ -294,6 +303,16 @@ public sealed class SmsVdp
         var b = (byte)(((value >> 4) & 0x03) * 85);
         if (r != 0 || g != 0 || b != 0)
             m_hasNonBlackPixelThisFrame = true;
+        return (b, g, r);
+    }
+
+    private (byte b, byte g, byte r) DecodeBackdropColor()
+    {
+        var index = m_registers[7] & 0x0F;
+        var value = m_cram[index & 0x1F];
+        var r = (byte)((value & 0x03) * 85);
+        var g = (byte)(((value >> 2) & 0x03) * 85);
+        var b = (byte)(((value >> 4) & 0x03) * 85);
         return (b, g, r);
     }
 

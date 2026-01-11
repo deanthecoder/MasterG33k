@@ -39,7 +39,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly Cpu m_cpu;
     private readonly SmsVdp m_vdp;
     private readonly SmsPortDevice m_portDevice;
-    private readonly object m_cpuStepLock = new();
+    private readonly Lock m_cpuStepLock = new();
     private Thread m_cpuThread;
     private bool m_shutdownRequested;
     private readonly ClockSync m_clockSync;
