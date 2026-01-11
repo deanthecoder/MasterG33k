@@ -15,12 +15,9 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Threading;
 using Avalonia;
 using Avalonia.Media;
-using Avalonia.Media.Imaging;
-using Avalonia.Platform;
 using CSharp.Core;
 using CSharp.Core.Commands;
 using CSharp.Core.Extensions;
@@ -46,7 +43,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private Thread m_cpuThread;
     private bool m_shutdownRequested;
     private readonly ClockSync m_clockSync;
-    private readonly WriteableBitmap m_display;
+    private readonly LcdScreen m_screen;
     private long m_lastCpuTStates;
     private int m_framesRendered;
     private bool m_displayScanComplete;
@@ -125,8 +122,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         Mru = new MruFiles().InitFromString(Settings.MruFiles);
         Mru.OpenRequested += (_, file) => LoadRomFromFile(file, addToMru: false);
 
-        m_display = CreateBlackDisplay();
-        Display = m_display;
+        m_screen = new LcdScreen(SmsVdp.FrameWidth, SmsVdp.FrameHeight);
+        Display = m_screen.Display;
         m_vdp = new SmsVdp();
         m_vdp.FrameRendered += OnFrameRendered;
         m_portDevice = new SmsPortDevice(m_vdp);
@@ -335,6 +332,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public void Dispose()
     {
         StopCpu();
+        m_screen.Dispose();
         Settings.MruFiles = Mru.AsString();
         Settings.PropertyChanged -= OnSettingsPropertyChanged;
     }
@@ -397,31 +395,12 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private static WriteableBitmap CreateBlackDisplay()
-    {
-        var bitmap = new WriteableBitmap(
-            new PixelSize(256, 192),
-            new Vector(96, 96),
-            PixelFormat.Bgra8888,
-            AlphaFormat.Premul);
-
-        using var fb = bitmap.Lock();
-        var bytes = new byte[fb.RowBytes * fb.Size.Height];
-        for (var i = 3; i < bytes.Length; i += 4)
-            bytes[i] = 255;
-        Marshal.Copy(bytes, 0, fb.Address, bytes.Length);
-
-        return bitmap;
-    }
-
     private void OnFrameRendered(object sender, byte[] frameBuffer)
     {
         if (frameBuffer == null || frameBuffer.Length == 0)
             return;
 
-        using var fb = m_display.Lock();
-        var length = Math.Min(frameBuffer.Length, fb.RowBytes * fb.Size.Height);
-        Marshal.Copy(frameBuffer, 0, fb.Address, length);
+        m_screen.Update(frameBuffer);
         DisplayUpdated?.Invoke(this, EventArgs.Empty);
 
         if (m_displayScanComplete)
