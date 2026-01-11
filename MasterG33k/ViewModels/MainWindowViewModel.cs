@@ -20,6 +20,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using CSharp.Core;
 using CSharp.Core.Extensions;
+using CSharp.Core.UI;
 using CSharp.Core.ViewModels;
 using DTC.Z80;
 
@@ -37,6 +38,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     public MruFiles Mru { get; }
     public IImage Display { get; }
+    public AboutInfo AboutInfo { get; } = AboutInfoProvider.Info;
 
     public Settings Settings => Settings.Instance;
 

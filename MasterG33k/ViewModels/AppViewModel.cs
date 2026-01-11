@@ -8,31 +8,14 @@
 // 
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
-using System.Windows.Input;
-using Avalonia;
-using CSharp.Core.Commands;
-using CSharp.Core.Extensions;
-using MasterG33k.Views;
+using CSharp.Core.UI;
 
 namespace MasterG33k.ViewModels;
 
-public class AppViewModel
+public class AppViewModel : AppViewModelBase
 {
-    public ICommand AboutCommand { get; }
-
     public AppViewModel()
+        : base(AboutInfoProvider.Info)
     {
-        var isOpen = false;
-        AboutCommand = new RelayCommand(_ =>
-        {
-            if (isOpen)
-                return;
-            var dialog = new AboutDialog();
-            dialog.Opened += (_, _) => isOpen = true;
-            dialog.Closed += (_, _) => isOpen = false;
-            var mainWindow = Application.Current?.GetMainWindow();
-            if (mainWindow != null)
-                dialog.ShowDialog(mainWindow);
-        });
     }
 }
