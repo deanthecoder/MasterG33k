@@ -8,6 +8,8 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using System.Diagnostics;
+using DTC.Z80.Debuggers;
 using DTC.Z80.Devices;
 
 namespace DTC.Z80;
@@ -18,6 +20,7 @@ namespace DTC.Z80;
 public sealed class Cpu
 {
     private bool m_interruptPending;
+    private readonly List<ICpuDebugger> m_debuggers = new();
 
     public Registers Reg { get; }
     public Registers TheRegisters { get; }
@@ -26,6 +29,11 @@ public sealed class Cpu
     public Alu Alu { get; }
 
     public bool IsHalted { get; set; }
+
+    public IReadOnlyCollection<ICpuDebugger> Debuggers => m_debuggers.AsReadOnly();
+
+    public ushort CurrentInstructionAddress { get; private set; }
+    
     // ReSharper disable InconsistentNaming
     public long TStates { get; private set; }
     public long TStatesSinceCpuStart => TStates;
@@ -49,6 +57,14 @@ public sealed class Cpu
         TStates = 0;
     }
 
+    public void AddDebugger(ICpuDebugger debugger)
+    {
+        if (debugger == null)
+            throw new ArgumentNullException(nameof(debugger));
+
+        m_debuggers.Add(debugger);
+    }
+
     public void Step()
     {
         if (IsHalted)
@@ -56,10 +72,12 @@ public sealed class Cpu
             TheRegisters.IncrementR();
             InternalWait(4);
             ServiceInterrupts();
+            NotifyAfterStep();
             return;
         }
 
         var pc = TheRegisters.PC;
+        CurrentInstructionAddress = pc;
         var isLogging = InstructionLogger.IsEnabled;
         string preRegState = null;
         string preFlags = null;
@@ -70,6 +88,7 @@ public sealed class Cpu
         }
 
         var opcode = FetchOpcode8();
+        NotifyBeforeInstruction(pc, opcode);
         var instruction = Instructions.Instructions.Table[opcode];
         if (isLogging)
         {
@@ -78,6 +97,7 @@ public sealed class Cpu
         }
         instruction?.Execute(this);
         ServiceInterrupts();
+        NotifyAfterStep();
     }
 
     public void RequestInterrupt() => m_interruptPending = true;
@@ -118,10 +138,12 @@ public sealed class Cpu
 
     public byte FetchOpcode8()
     {
-        var value = Bus.Read8(TheRegisters.PC);
+        var address = TheRegisters.PC;
+        var value = Bus.Read8(address);
         TheRegisters.PC++;
         TheRegisters.IncrementR();
         InternalWait(4);
+        NotifyMemoryRead(address, value);
         return value;
     }
 
@@ -132,6 +154,7 @@ public sealed class Cpu
     {
         var value = Bus.Read8(address);
         InternalWait(3);
+        NotifyMemoryRead(address, value);
         return value;
     }
 
@@ -139,6 +162,7 @@ public sealed class Cpu
     {
         Bus.Write8(address, value);
         InternalWait(3);
+        NotifyMemoryWrite(address, value);
     }
 
     public void Write16(ushort address, ushort value)
@@ -159,5 +183,45 @@ public sealed class Cpu
         Write8((ushort)(Reg.SP - 1), (byte)(Reg.PC >> 8));
         Write8((ushort)(Reg.SP - 2), (byte)(Reg.PC & 0xFF));
         Reg.SP -= 2;
+    }
+
+    [Conditional("DEBUG")]
+    private void NotifyBeforeInstruction(ushort opcodeAddress, byte opcode)
+    {
+        if (m_debuggers.Count == 0)
+            return;
+
+        foreach (var debugger in m_debuggers)
+            debugger.BeforeInstruction(this, opcodeAddress, opcode);
+    }
+
+    [Conditional("DEBUG")]
+    private void NotifyAfterStep()
+    {
+        if (m_debuggers.Count == 0)
+            return;
+
+        foreach (var debugger in m_debuggers)
+            debugger.AfterStep(this);
+    }
+
+    [Conditional("DEBUG")]
+    private void NotifyMemoryRead(ushort address, byte value)
+    {
+        if (m_debuggers.Count == 0)
+            return;
+
+        foreach (var debugger in m_debuggers)
+            debugger.OnMemoryRead(this, address, value);
+    }
+
+    [Conditional("DEBUG")]
+    private void NotifyMemoryWrite(ushort address, byte value)
+    {
+        if (m_debuggers.Count == 0)
+            return;
+
+        foreach (var debugger in m_debuggers)
+            debugger.OnMemoryWrite(this, address, value);
     }
 }
