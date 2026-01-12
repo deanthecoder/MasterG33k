@@ -220,7 +220,7 @@ public static class Disassembler
             return $"({index})";
 
         var sign = displacement < 0 ? "-" : "+";
-        var magnitude = (byte)Math.Abs(displacement);
+        var magnitude = (byte)(displacement < 0 ? -displacement : displacement);
         return $"({index}{sign}${magnitude:X2})";
     }
 

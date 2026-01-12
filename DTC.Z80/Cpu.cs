@@ -91,9 +91,13 @@ public sealed class Cpu
             return;
 
         m_interruptPending = false;
+        if (IsHalted)
+        {
+            IsHalted = false;
+            Reg.PC++;
+        }
         Reg.IFF1 = false;
         Reg.IFF2 = false;
-        IsHalted = false;
 
         PushPC();
         Reg.PC = Reg.IM switch
