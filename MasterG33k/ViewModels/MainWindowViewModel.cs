@@ -39,6 +39,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly Cpu m_cpu;
     private readonly SmsVdp m_vdp;
     private readonly SmsJoypad m_joypad;
+    private readonly SmsMemoryController m_memoryController;
     private readonly Lock m_cpuStepLock = new();
     private Thread m_cpuThread;
     private bool m_shutdownRequested;
@@ -121,8 +122,10 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         m_vdp = new SmsVdp();
         m_vdp.FrameRendered += OnFrameRendered;
         m_joypad = new SmsJoypad();
-        var portDevice = new SmsPortDevice(m_vdp, m_joypad);
+        m_memoryController = new SmsMemoryController();
+        var portDevice = new SmsPortDevice(m_vdp, m_joypad, m_memoryController);
         m_cpu = new Cpu(new Bus(new Memory(), portDevice));
+        m_cpu.Bus.Attach(m_memoryController);
         m_clockSync = new ClockSync(GetEffectiveCpuHz, () => m_cpu.TStatesSinceCpuStart, () => m_cpu.Reset());
         Settings.PropertyChanged += OnSettingsPropertyChanged;
         IsCpuHistoryTracked = Settings.IsCpuHistoryTracked;
@@ -192,14 +195,17 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         if (biosData.Length > 0x4000)
         {
             var romDevice = new SmsRomDevice(biosData);
-            m_cpu.Bus.Attach(romDevice);
             m_cpu.Bus.Attach(new SmsMapperDevice(romDevice));
+            m_memoryController.SetCartridge(romDevice);
+            m_memoryController.SetBios(null);
+            m_memoryController.Reset();
             LogRomInfo(biosFile, biosData, romDevice.BankCount);
             StartCpuIfNeeded();
             return;
         }
 
-        m_cpu.Bus.Attach(new BiosRomDevice(biosData));
+        m_memoryController.SetBios(biosData);
+        m_memoryController.Reset();
         LogRomInfo(biosFile, biosData, bankCount: 1);
         StartCpuIfNeeded();
     }
@@ -254,6 +260,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         {
             m_cpu.Reset();
             m_vdp.Reset();
+            m_memoryController.Reset();
             m_clockSync.Reset();
             m_lastCpuTStates = 0;
         }
@@ -263,9 +270,13 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public void DumpCpuHistory() =>
         m_cpu.InstructionLogger.DumpToConsole();
 
-    public void ReportCpuClockTicks() => Logger.Instance.Info("CPU clock ticks are not implemented yet.");
+    public void ReportCpuClockTicks() =>
+        Console.WriteLine($"CPU clock ticks: {m_cpu.TStatesSinceCpuStart}");
 
     public void TrackCpuHistory() => IsCpuHistoryTracked = !IsCpuHistoryTracked;
+
+    public void SetInputActive(bool isActive) =>
+        m_joypad.SetInputEnabled(isActive);
 
     private void OnSettingsPropertyChanged(object sender, PropertyChangedEventArgs e)
     {
@@ -300,14 +311,15 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         StopCpu();
 
         var romDevice = new SmsRomDevice(romData);
-        m_cpu.Bus.Attach(romDevice);
         m_cpu.Bus.Attach(new SmsMapperDevice(romDevice));
+        m_memoryController.SetCartridge(romDevice);
 
         lock (m_cpuStepLock)
         {
             Array.Clear(m_cpu.MainMemory.Data, 0, m_cpu.MainMemory.Data.Length);
             m_cpu.Reset();
             m_vdp.Reset();
+            m_memoryController.Reset();
             m_clockSync.Reset();
             m_lastCpuTStates = 0;
         }

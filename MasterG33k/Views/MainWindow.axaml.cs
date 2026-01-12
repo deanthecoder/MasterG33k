@@ -32,6 +32,8 @@ public partial class MainWindow : Window
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
         AddHandler(DragDrop.DropEvent, OnDrop);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
+        Activated += (_, _) => ViewModel?.SetInputActive(true);
+        Deactivated += (_, _) => ViewModel?.SetInputActive(false);
 
         Logger.Instance.Info("Application starting.");
     }
@@ -64,6 +66,8 @@ public partial class MainWindow : Window
             {
             }
         };
+
+        ViewModel?.SetInputActive(IsActive);
     }
 
     private static void OnPreviewKeyDown(object sender, KeyEventArgs e)

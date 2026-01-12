@@ -61,6 +61,9 @@ public sealed class SmsJoypad : IDisposable
             return m_pressedButtons;
     }
 
+    public void SetInputEnabled(bool isEnabled) =>
+        HandlePressEvents = isEnabled;
+
     public IDisposable CreatePressBlocker() =>
         new PressBlocker(this);
 
