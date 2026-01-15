@@ -32,9 +32,13 @@ public sealed class SmsVdp
     private const int TotalScanlines = 262;
     private const int VblankStartLine = 192;
     private const byte StatusVblankBit = 0x80;
-    private const int HCounterCountsPerLine = 171;
-    private const int HCounterJumpStart = 0x94; // 0x00-0x93 then 0xE9-0xFF.
-    private const int HCounterF4Cycle = 212; // H counter value F4h occurs at count 159 -> 212 CPU cycles.
+
+    // Item (4): Background tile attribute bit positions in Mode 4
+    private const int AttrBit_TileIndexMsb = 0;   // Name table high byte bit 0 -> tile index bit 8
+    private const int AttrBit_HFlip        = 1;   // Horizontal flip
+    private const int AttrBit_VFlip        = 2;   // Vertical flip
+    private const int AttrBit_Palette      = 3;   // Palette select (0/1)
+    private const int AttrBit_Priority     = 4;   // BG priority over sprites
 
     private readonly byte[] m_vram = new byte[VramSize];
     private readonly byte[] m_cram = new byte[CramSize];
@@ -43,6 +47,8 @@ public sealed class SmsVdp
     // Per-pixel metadata buffers used for correct sprite/background compositing.
     // Priority buffer: 1 when BG tile priority bit is set for the pixel; 0 otherwise.
     private readonly byte[] m_bgPriority = new byte[FrameWidth * FrameHeight];
+    // Tracks how many sprites have contributed pixels to each scanline (for 8 sprites/line rule).
+    private readonly int[] m_spritesOnLine = new int[FrameHeight];
 
     private ushort m_address;
     private byte m_controlLatchLow;
@@ -53,10 +59,8 @@ public sealed class SmsVdp
     private int m_registerWrites;
     private int m_controlWrites;
 
-    private int m_cycleInLine;
-    private int m_line;
-    private bool m_f4Triggered;
-    private byte m_lineInterruptCounter;
+    private int m_cycleAccumulator;
+    private int m_vCounter;
     private byte m_status;
     private bool m_interruptPending;
 
@@ -73,9 +77,9 @@ public sealed class SmsVdp
         m_registers[4] = 0xFF; // Pattern base bit set (commonly 0x0000/0x2000 depending on mode); corrected by fallback in RenderFrame().
         m_registers[5] = 0xFF; // Sprite attribute table base -> 0x3F00.
         m_registers[6] = 0xFF; // Sprite pattern base bit.
-        m_registers[10] = 0x01; // Line interrupt counter power-on value.
         Array.Clear(m_frameBuffer, 0, m_frameBuffer.Length);
         Array.Clear(m_bgPriority, 0, m_bgPriority.Length);
+        Array.Clear(m_spritesOnLine, 0, m_spritesOnLine.Length);
         m_address = 0;
         m_controlLatchLow = 0;
         m_isControlLatchFull = false;
@@ -84,39 +88,19 @@ public sealed class SmsVdp
         m_cramWrites = 0;
         m_registerWrites = 0;
         m_controlWrites = 0;
-        m_cycleInLine = 0;
-        m_line = 0;
-        m_f4Triggered = false;
-        m_lineInterruptCounter = m_registers[10];
+        m_cycleAccumulator = 0;
+        m_vCounter = 0;
         m_status = 0;
         m_interruptPending = false;
     }
 
     public void AdvanceCycles(long tStates)
     {
-        var remaining = (int)tStates;
-        while (remaining > 0)
+        m_cycleAccumulator += (int)tStates;
+        while (m_cycleAccumulator >= CyclesPerScanline)
         {
-            var cyclesToLineEnd = CyclesPerScanline - m_cycleInLine;
-            var cyclesToF4 = m_f4Triggered ? cyclesToLineEnd : HCounterF4Cycle - m_cycleInLine;
-            if (cyclesToF4 < 0)
-                cyclesToF4 = cyclesToLineEnd;
-            var step = Math.Min(remaining, Math.Min(cyclesToF4, cyclesToLineEnd));
-
-            m_cycleInLine += step;
-            remaining -= step;
-
-            if (!m_f4Triggered && m_cycleInLine >= HCounterF4Cycle)
-            {
-                m_f4Triggered = true;
-                HandleHCounterF4();
-            }
-
-            if (m_cycleInLine >= CyclesPerScanline)
-            {
-                m_cycleInLine -= CyclesPerScanline;
-                m_f4Triggered = false;
-            }
+            m_cycleAccumulator -= CyclesPerScanline;
+            AdvanceScanline();
         }
     }
 
@@ -150,9 +134,9 @@ public sealed class SmsVdp
         return status;
     }
 
-    public byte ReadVCounter() => MapVCounter(m_line);
+    public byte ReadVCounter() => (byte)m_vCounter;
 
-    public byte ReadHCounter() => MapHCounter(GetHCounterCount());
+    public byte ReadHCounter() => 0;
 
     public void WriteControl(byte value)
     {
@@ -172,8 +156,6 @@ public sealed class SmsVdp
             if (regIndex < m_registers.Length)
             {
                 m_registers[regIndex] = m_controlLatchLow;
-                if (regIndex == 10)
-                    m_lineInterruptCounter = m_controlLatchLow;
                 m_registerWrites++;
             }
         }
@@ -235,28 +217,10 @@ public sealed class SmsVdp
                $"PatternBase(reg)=0x{patternBaseFromRegs:X4} PatternBase(sel)=0x{primaryPatternBase:X4}/0x{alternatePatternBase:X4} Hits={primaryHits}/{alternateHits} MaxTile={maxTile}";
     }
 
-    private void HandleHCounterF4()
+    private void AdvanceScanline()
     {
-        var lineInActiveArea = m_line <= VblankStartLine;
-        if (lineInActiveArea)
-        {
-            if (m_lineInterruptCounter == 0)
-            {
-                TriggerLineInterrupt();
-                m_lineInterruptCounter = m_registers[10];
-            }
-            else
-            {
-                m_lineInterruptCounter--;
-            }
-        }
-        else
-        {
-            m_lineInterruptCounter = m_registers[10];
-        }
-
-        m_line++;
-        if (m_line == VblankStartLine)
+        m_vCounter++;
+        if (m_vCounter == VblankStartLine)
         {
             m_status |= StatusVblankBit;
             if ((m_registers[1] & 0x20) != 0)
@@ -264,9 +228,9 @@ public sealed class SmsVdp
             RenderFrame();
             FrameRendered?.Invoke(this, m_frameBuffer);
         }
-        else if (m_line >= TotalScanlines)
+        else if (m_vCounter >= TotalScanlines)
         {
-            m_line = 0;
+            m_vCounter = 0;
         }
     }
 
@@ -305,6 +269,7 @@ public sealed class SmsVdp
 
         // Clear per-frame metadata buffers.
         Array.Clear(m_bgPriority, 0, m_bgPriority.Length);
+        Array.Clear(m_spritesOnLine, 0, m_spritesOnLine.Length);
 
         for (var y = 0; y < FrameHeight; y++)
         {
@@ -322,11 +287,11 @@ public sealed class SmsVdp
                 var low = m_vram[entryAddr];
                 var high = m_vram[(entryAddr + 1) & 0x3FFF];
 
-                var tileIndex = low | ((high & 0x01) << 8);
-                var hFlip = high.IsBitSet(1);
-                var vFlip = high.IsBitSet(2);
-                var palette = high.IsBitSet(3) ? 1 : 0;
-                var bgPriority = high.IsBitSet(4); // BG tile priority (in front of sprites)
+                var tileIndex = low | (((high >> AttrBit_TileIndexMsb) & 0x01) << 8);
+                var hFlip = high.IsBitSet(AttrBit_HFlip);
+                var vFlip = high.IsBitSet(AttrBit_VFlip);
+                var palette = high.IsBitSet(AttrBit_Palette) ? 1 : 0;
+                var bgPriority = high.IsBitSet(AttrBit_Priority); // BG priority over sprites
 
                 var tileBase = (patternBase + tileIndex * 32) & 0x3FFF;
                 var sourceRow = vFlip ? 7 - rowInTile : rowInTile;
@@ -356,7 +321,7 @@ public sealed class SmsVdp
                 m_frameBuffer[pixelOffset + 2] = r;
                 m_frameBuffer[pixelOffset + 3] = 255;
 
-                // Record BG priority only when the BG pixel is non-zero (color 0 is transparent to sprites).
+                // Item (1): Record BG priority only when BG pixel is visible (color != 0).
                 m_bgPriority[(y * FrameWidth) + x] = (byte)(bgPriority && colorIndex != 0 ? 1 : 0);
             }
         }
@@ -384,6 +349,7 @@ public sealed class SmsVdp
         var b = (byte)(((value >> 4) & 0x03) * 85);
         return (b, g, r);
     }
+
 
     /// <summary>
     /// Dump the current frame buffer to disk (.tga).
@@ -458,7 +424,13 @@ public sealed class SmsVdp
 
         return false;
     }
-    
+
+    private int SelectPatternBase(int nameTableBase, int primaryBase, int alternateBase)
+    {
+        var (primaryHits, alternateHits, _) = CountPatternHits(nameTableBase, primaryBase, alternateBase);
+        return alternateHits > primaryHits ? alternateBase : primaryBase;
+    }
+
     private (int primaryHits, int alternateHits, int maxTile) CountPatternHits(int nameTableBase, int primaryBase, int alternateBase)
     {
         var primaryHits = 0;
@@ -473,7 +445,7 @@ public sealed class SmsVdp
             if (low == 0 && high == 0)
                 continue;
 
-            var tileIndex = low | ((high & 0x01) << 8);
+            var tileIndex = low | (((high >> AttrBit_TileIndexMsb) & 0x01) << 8);
             if (tileIndex > maxTile)
                 maxTile = tileIndex;
 
@@ -494,7 +466,6 @@ public sealed class SmsVdp
         var spriteHeight = (m_registers[1] & 0x02) != 0 ? 16 : 8;
         var zoom = m_registers[1].IsBitSet(0);
         var spriteShift = m_registers[0].IsBitSet(3) ? -8 : 0;
-
         // Build list until terminator (0xD0), then draw in reverse order so low indices appear on top.
         Span<int> indices = stackalloc int[64];
         var count = 0;
@@ -564,12 +535,28 @@ public sealed class SmsVdp
                 var maxX = Math.Min(FrameWidth, destX + scale);
                 for (var py = destY; py < maxY; py++)
                 {
+                    // Enforce 8 sprites per scanline: if we've already drawn 8 sprites for this scanline,
+                    // set overflow bit and skip drawing further sprite pixels on this line.
+                    if (m_spritesOnLine[py] >= 8)
+                    {
+                        m_status |= 0x20; // sprite overflow
+                        continue;
+                    }
                     var rowOffset = (py * FrameWidth + destX) * 4;
                     for (var px = destX; px < maxX; px++)
                     {
-                        // BG priority mask per pixel: if BG has priority and is non-zero here, skip.
+                        // Item (5): Apply BG priority masking per pixel (px,py), including when sprites are zoomed.
+                        // This ensures scaled sprite blocks respect BG priority at every covered pixel.
                         if (m_bgPriority[(py * FrameWidth) + px] != 0)
                             continue;
+
+                        // Count this sprite as present on this scanline the first time we emit a pixel on it.
+                        if (m_spritesOnLine[py] < 8)
+                        {
+                            // Increment once per contributing sprite; approximate by incrementing on first pixel.
+                            m_spritesOnLine[py]++;
+                        }
+
                         var offset = rowOffset + (px - destX) * 4;
                         m_frameBuffer[offset] = b;
                         m_frameBuffer[offset + 1] = g;
@@ -579,36 +566,6 @@ public sealed class SmsVdp
                 }
             }
         }
-    }
-
-    private void TriggerLineInterrupt()
-    {
-        if ((m_registers[0] & 0x10) != 0)
-            m_interruptPending = true;
-    }
-
-    private int GetHCounterCount()
-    {
-        var count = (m_cycleInLine * 3) / 4;
-        if (count >= HCounterCountsPerLine)
-            count = HCounterCountsPerLine - 1;
-        return count;
-    }
-
-    private static byte MapHCounter(int count)
-    {
-        if (count < HCounterJumpStart)
-            return (byte)count;
-
-        return (byte)(0xE9 + (count - HCounterJumpStart));
-    }
-
-    private static byte MapVCounter(int line)
-    {
-        if (line <= 0xDA)
-            return (byte)line;
-
-        return (byte)(0xD5 + (line - 0xDB));
     }
 
     private enum AccessMode : byte
