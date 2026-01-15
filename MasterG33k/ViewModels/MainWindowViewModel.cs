@@ -45,6 +45,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly Lock m_cpuStepLock = new();
     private Thread m_cpuThread;
     private bool m_shutdownRequested;
+    private volatile bool m_pauseNmiRequested;
     private readonly ClockSync m_clockSync;
     private readonly LcdScreen m_screen;
     private long m_lastCpuTStates;
@@ -131,6 +132,11 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         m_joypad = new SmsJoypad();
         m_memoryController = new SmsMemoryController();
         var portDevice = new SmsPortDevice(m_vdp, m_joypad, m_memoryController);
+        m_joypad.PausePressed += (_, __) =>
+        {
+            // Map Pause to NMI on the CPU without blocking the UI thread.
+            m_pauseNmiRequested = true;
+        };
         m_cpu = new Cpu(new Bus(new Memory(), portDevice));
         m_cpu.Bus.Attach(m_memoryController);
         m_loopDebugger = new CpuLoopDebugger(() =>
@@ -405,6 +411,11 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
                 m_clockSync.SyncWithRealTime();
                 lock (m_cpuStepLock)
                 {
+                    if (m_pauseNmiRequested)
+                    {
+                        m_pauseNmiRequested = false;
+                        m_cpu.RequestNmi();
+                    }
                     m_cpu.Step();
                     var current = m_cpu.TStatesSinceCpuStart;
                     var delta = current - m_lastCpuTStates;

@@ -28,6 +28,8 @@ public sealed class SmsJoypad : IDisposable
     private SmsJoypadButtons m_autoFireHeldButtons;
     private bool m_autoFirePulseOn;
 
+    public event EventHandler PausePressed;
+
     public SmsJoypad()
     {
         m_keyboardHook = new SimpleGlobalHook();
@@ -71,6 +73,13 @@ public sealed class SmsJoypad : IDisposable
     {
         if (!m_handlePressEvents)
             return;
+
+        // Console Pause (maps to NMI). Fire on key press only.
+        if (keyCode == KeyCode.VcP && isPressed)
+        {
+            PausePressed?.Invoke(this, EventArgs.Empty);
+            return;
+        }
 
         if (keyCode == KeyCode.VcA)
         {
