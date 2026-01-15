@@ -40,6 +40,9 @@ public sealed class SmsVdp
     private readonly byte[] m_cram = new byte[CramSize];
     private readonly byte[] m_registers = new byte[RegisterCount];
     private readonly byte[] m_frameBuffer = new byte[FrameWidth * FrameHeight * 4];
+    // Per-pixel metadata buffers used for correct sprite/background compositing.
+    // Priority buffer: 1 when BG tile priority bit is set for the pixel; 0 otherwise.
+    private readonly byte[] m_bgPriority = new byte[FrameWidth * FrameHeight];
 
     private ushort m_address;
     private byte m_controlLatchLow;
@@ -72,6 +75,7 @@ public sealed class SmsVdp
         m_registers[6] = 0xFF; // Sprite pattern base bit.
         m_registers[10] = 0x01; // Line interrupt counter power-on value.
         Array.Clear(m_frameBuffer, 0, m_frameBuffer.Length);
+        Array.Clear(m_bgPriority, 0, m_bgPriority.Length);
         m_address = 0;
         m_controlLatchLow = 0;
         m_isControlLatchFull = false;
@@ -299,6 +303,9 @@ public sealed class SmsVdp
         var scrollX = m_registers[8];
         var scrollY = m_registers[9];
 
+        // Clear per-frame metadata buffers.
+        Array.Clear(m_bgPriority, 0, m_bgPriority.Length);
+
         for (var y = 0; y < FrameHeight; y++)
         {
             var sourceY = (y + scrollY) & 0xFF;
@@ -319,6 +326,7 @@ public sealed class SmsVdp
                 var hFlip = high.IsBitSet(1);
                 var vFlip = high.IsBitSet(2);
                 var palette = high.IsBitSet(3) ? 1 : 0;
+                var bgPriority = high.IsBitSet(4); // BG tile priority (in front of sprites)
 
                 var tileBase = (patternBase + tileIndex * 32) & 0x3FFF;
                 var sourceRow = vFlip ? 7 - rowInTile : rowInTile;
@@ -347,6 +355,9 @@ public sealed class SmsVdp
                 m_frameBuffer[pixelOffset + 1] = g;
                 m_frameBuffer[pixelOffset + 2] = r;
                 m_frameBuffer[pixelOffset + 3] = 255;
+
+                // Record BG priority only when the BG pixel is non-zero (color 0 is transparent to sprites).
+                m_bgPriority[(y * FrameWidth) + x] = (byte)(bgPriority && colorIndex != 0 ? 1 : 0);
             }
         }
 
@@ -547,6 +558,9 @@ public sealed class SmsVdp
                     var rowOffset = (py * FrameWidth + destX) * 4;
                     for (var px = destX; px < maxX; px++)
                     {
+                        // BG priority mask per pixel: if BG has priority and is non-zero here, skip.
+                        if (m_bgPriority[(py * FrameWidth) + px] != 0)
+                            continue;
                         var offset = rowOffset + (px - destX) * 4;
                         m_frameBuffer[offset] = b;
                         m_frameBuffer[offset + 1] = g;
