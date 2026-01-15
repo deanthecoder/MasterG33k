@@ -495,12 +495,21 @@ public sealed class SmsVdp
         var zoom = m_registers[1].IsBitSet(0);
         var spriteShift = m_registers[0].IsBitSet(3) ? -8 : 0;
 
+        // Build list until terminator (0xD0), then draw in reverse order so low indices appear on top.
+        Span<int> indices = stackalloc int[64];
+        var count = 0;
         for (var i = 0; i < 64; i++)
         {
-            var y = m_vram[(spriteTableBase + i) & 0x3FFF];
-            if (y == 0xD0)
+            var yTerm = m_vram[(spriteTableBase + i) & 0x3FFF];
+            if (yTerm == 0xD0)
                 break;
+            indices[count++] = i;
+        }
 
+        for (var idx = count - 1; idx >= 0; idx--)
+        {
+            var i = indices[idx];
+            var y = m_vram[(spriteTableBase + i) & 0x3FFF];
             var spriteY = (y + 1) & 0xFF;
             if (spriteY >= FrameHeight)
                 continue;
