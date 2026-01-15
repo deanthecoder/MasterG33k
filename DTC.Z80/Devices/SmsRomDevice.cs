@@ -42,9 +42,11 @@ public sealed class SmsRomDevice : IMemDevice
 
         m_data = data;
         m_bankCount = Math.Max(1, (data.Length + BankSize - 1) / BankSize);
+        // SMS expectation: slot 0 = bank 0; slot 1 = bank 1 (or 0 if single bank);
+        // slot 2 (0x8000-0xBFFF) defaults to the last bank of the ROM.
         SetBank0(0);
-        SetBank1(1);
-        SetBank2(2);
+        SetBank1((byte)Math.Min(1, m_bankCount - 1));
+        SetBank2((byte)(m_bankCount - 1));
     }
 
     public void SetControl(byte value) => m_control = value;
