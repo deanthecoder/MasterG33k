@@ -32,6 +32,9 @@ public sealed class SmsVdp
     private const int TotalScanlines = 262;
     private const int VblankStartLine = 192;
     private const byte StatusVblankBit = 0x80;
+    private const int HCounterCountsPerLine = 171;
+    private const int HCounterJumpStart = 0x94; // 0x00-0x93 then 0xE9-0xFF.
+    private const int HCounterF4Cycle = 212; // H counter value F4h occurs at count 159 -> 212 CPU cycles.
 
     private readonly byte[] m_vram = new byte[VramSize];
     private readonly byte[] m_cram = new byte[CramSize];
@@ -47,8 +50,10 @@ public sealed class SmsVdp
     private int m_registerWrites;
     private int m_controlWrites;
 
-    private int m_cycleAccumulator;
-    private int m_vCounter;
+    private int m_cycleInLine;
+    private int m_line;
+    private bool m_f4Triggered;
+    private byte m_lineInterruptCounter;
     private byte m_status;
     private bool m_interruptPending;
 
@@ -65,6 +70,7 @@ public sealed class SmsVdp
         m_registers[4] = 0xFF; // Pattern base bit set (commonly 0x0000/0x2000 depending on mode); corrected by fallback in RenderFrame().
         m_registers[5] = 0xFF; // Sprite attribute table base -> 0x3F00.
         m_registers[6] = 0xFF; // Sprite pattern base bit.
+        m_registers[10] = 0x01; // Line interrupt counter power-on value.
         Array.Clear(m_frameBuffer, 0, m_frameBuffer.Length);
         m_address = 0;
         m_controlLatchLow = 0;
@@ -74,19 +80,39 @@ public sealed class SmsVdp
         m_cramWrites = 0;
         m_registerWrites = 0;
         m_controlWrites = 0;
-        m_cycleAccumulator = 0;
-        m_vCounter = 0;
+        m_cycleInLine = 0;
+        m_line = 0;
+        m_f4Triggered = false;
+        m_lineInterruptCounter = m_registers[10];
         m_status = 0;
         m_interruptPending = false;
     }
 
     public void AdvanceCycles(long tStates)
     {
-        m_cycleAccumulator += (int)tStates;
-        while (m_cycleAccumulator >= CyclesPerScanline)
+        var remaining = (int)tStates;
+        while (remaining > 0)
         {
-            m_cycleAccumulator -= CyclesPerScanline;
-            AdvanceScanline();
+            var cyclesToLineEnd = CyclesPerScanline - m_cycleInLine;
+            var cyclesToF4 = m_f4Triggered ? cyclesToLineEnd : HCounterF4Cycle - m_cycleInLine;
+            if (cyclesToF4 < 0)
+                cyclesToF4 = cyclesToLineEnd;
+            var step = Math.Min(remaining, Math.Min(cyclesToF4, cyclesToLineEnd));
+
+            m_cycleInLine += step;
+            remaining -= step;
+
+            if (!m_f4Triggered && m_cycleInLine >= HCounterF4Cycle)
+            {
+                m_f4Triggered = true;
+                HandleHCounterF4();
+            }
+
+            if (m_cycleInLine >= CyclesPerScanline)
+            {
+                m_cycleInLine -= CyclesPerScanline;
+                m_f4Triggered = false;
+            }
         }
     }
 
@@ -120,9 +146,9 @@ public sealed class SmsVdp
         return status;
     }
 
-    public byte ReadVCounter() => (byte)m_vCounter;
+    public byte ReadVCounter() => MapVCounter(m_line);
 
-    public byte ReadHCounter() => 0;
+    public byte ReadHCounter() => MapHCounter(GetHCounterCount());
 
     public void WriteControl(byte value)
     {
@@ -142,6 +168,8 @@ public sealed class SmsVdp
             if (regIndex < m_registers.Length)
             {
                 m_registers[regIndex] = m_controlLatchLow;
+                if (regIndex == 10)
+                    m_lineInterruptCounter = m_controlLatchLow;
                 m_registerWrites++;
             }
         }
@@ -203,10 +231,28 @@ public sealed class SmsVdp
                $"PatternBase(reg)=0x{patternBaseFromRegs:X4} PatternBase(sel)=0x{primaryPatternBase:X4}/0x{alternatePatternBase:X4} Hits={primaryHits}/{alternateHits} MaxTile={maxTile}";
     }
 
-    private void AdvanceScanline()
+    private void HandleHCounterF4()
     {
-        m_vCounter++;
-        if (m_vCounter == VblankStartLine)
+        var lineInActiveArea = m_line <= VblankStartLine;
+        if (lineInActiveArea)
+        {
+            if (m_lineInterruptCounter == 0)
+            {
+                TriggerLineInterrupt();
+                m_lineInterruptCounter = m_registers[10];
+            }
+            else
+            {
+                m_lineInterruptCounter--;
+            }
+        }
+        else
+        {
+            m_lineInterruptCounter = m_registers[10];
+        }
+
+        m_line++;
+        if (m_line == VblankStartLine)
         {
             m_status |= StatusVblankBit;
             if ((m_registers[1] & 0x20) != 0)
@@ -214,9 +260,9 @@ public sealed class SmsVdp
             RenderFrame();
             FrameRendered?.Invoke(this, m_frameBuffer);
         }
-        else if (m_vCounter >= TotalScanlines)
+        else if (m_line >= TotalScanlines)
         {
-            m_vCounter = 0;
+            m_line = 0;
         }
     }
 
@@ -328,7 +374,6 @@ public sealed class SmsVdp
         return (b, g, r);
     }
 
-
     /// <summary>
     /// Dump the current frame buffer to disk (.tga).
     /// </summary>
@@ -402,13 +447,7 @@ public sealed class SmsVdp
 
         return false;
     }
-
-    private int SelectPatternBase(int nameTableBase, int primaryBase, int alternateBase)
-    {
-        var (primaryHits, alternateHits, _) = CountPatternHits(nameTableBase, primaryBase, alternateBase);
-        return alternateHits > primaryHits ? alternateBase : primaryBase;
-    }
-
+    
     private (int primaryHits, int alternateHits, int maxTile) CountPatternHits(int nameTableBase, int primaryBase, int alternateBase)
     {
         var primaryHits = 0;
@@ -517,6 +556,36 @@ public sealed class SmsVdp
                 }
             }
         }
+    }
+
+    private void TriggerLineInterrupt()
+    {
+        if ((m_registers[0] & 0x10) != 0)
+            m_interruptPending = true;
+    }
+
+    private int GetHCounterCount()
+    {
+        var count = (m_cycleInLine * 3) / 4;
+        if (count >= HCounterCountsPerLine)
+            count = HCounterCountsPerLine - 1;
+        return count;
+    }
+
+    private static byte MapHCounter(int count)
+    {
+        if (count < HCounterJumpStart)
+            return (byte)count;
+
+        return (byte)(0xE9 + (count - HCounterJumpStart));
+    }
+
+    private static byte MapVCounter(int line)
+    {
+        if (line <= 0xDA)
+            return (byte)line;
+
+        return (byte)(0xD5 + (line - 0xDB));
     }
 
     private enum AccessMode : byte

@@ -34,7 +34,7 @@ public sealed class ZexallSmsTests : TestsBase
         var vdp = new SmsVdp();
         var memoryController = new SmsMemoryController();
         var romDevice = new SmsRomDevice(romData);
-        memoryController.SetCartridge(romDevice);
+        memoryController.SetCartridge(romDevice, forceEnabled: false);
         memoryController.SetBios(null);
         memoryController.Reset();
 
@@ -42,7 +42,7 @@ public sealed class ZexallSmsTests : TestsBase
         var portDevice = new SmsPortDevice(vdp, joypad: null, memoryController, fallback: debugConsole);
         var bus = new Bus(new Memory(), portDevice);
         bus.Attach(memoryController);
-        bus.Attach(new SmsMapperDevice(romDevice));
+        bus.Attach(new SmsMapperDevice(memoryController, bus.MainMemory));
 
         var cpu = new Cpu(bus);
         Array.Clear(cpu.MainMemory.Data, 0, cpu.MainMemory.Data.Length);

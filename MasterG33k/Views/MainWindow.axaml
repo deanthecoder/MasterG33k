@@ -144,6 +144,7 @@
                         <MenuItem Header="Dump CPU History" Command="{Binding DumpCpuHistory}" IsEnabled="{Binding IsCpuHistoryTracked}" />
                         <Separator />
                         <MenuItem Header="Report CPU Clock Ticks" Command="{Binding ReportCpuClockTicks}" />
+                        <MenuItem Header="Report Frame Checksum + Ticks" Command="{Binding ReportFrameChecksum}" />
                     </MenuItem>
 
                     <MenuItem Header="_Help">

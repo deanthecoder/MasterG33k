@@ -1456,6 +1456,7 @@ public static class Instructions
             {
                 cpu.TheRegisters.IFF1 = false;
                 cpu.TheRegisters.IFF2 = false;
+                cpu.CancelEi();
             }
         ),
         new Instruction(
@@ -1524,8 +1525,7 @@ public static class Instructions
             "EI", // 0xFB
             static cpu =>
             {
-                cpu.TheRegisters.IFF1 = true;
-                cpu.TheRegisters.IFF2 = true;
+                cpu.ScheduleEi();
             }),
         new Instruction(
             "CALL M,a16", // 0xFC nn nn

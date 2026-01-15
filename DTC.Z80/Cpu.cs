@@ -20,6 +20,7 @@ namespace DTC.Z80;
 public sealed class Cpu
 {
     private bool m_interruptPending;
+    private int m_eiDelay;
     private readonly List<ICpuDebugger> m_debuggers = new();
 
     public Registers Reg { get; }
@@ -34,10 +35,8 @@ public sealed class Cpu
 
     public ushort CurrentInstructionAddress { get; private set; }
     
-    // ReSharper disable InconsistentNaming
-    public long TStates { get; private set; }
-    public long TStatesSinceCpuStart => TStates;
-    // ReSharper restore InconsistentNaming
+    // ReSharper disable once InconsistentNaming
+    public long TStatesSinceCpuStart { get; private set; }
 
     public Cpu(Bus bus)
     {
@@ -54,7 +53,8 @@ public sealed class Cpu
     {
         TheRegisters.Clear();
         IsHalted = false;
-        TStates = 0;
+        TStatesSinceCpuStart = 0;
+        m_eiDelay = 0;
     }
 
     public void AddDebugger(ICpuDebugger debugger)
@@ -96,11 +96,16 @@ public sealed class Cpu
             InstructionLogger.Write(() => $"{disassembly,-19}|{preRegState,-32}|{preFlags}");
         }
         instruction?.Execute(this);
+        ApplyEiDelay();
         ServiceInterrupts();
         NotifyAfterStep();
     }
 
     public void RequestInterrupt() => m_interruptPending = true;
+
+    internal void ScheduleEi() => m_eiDelay = 2;
+
+    internal void CancelEi() => m_eiDelay = 0;
 
     private void ServiceInterrupts()
     {
@@ -127,6 +132,19 @@ public sealed class Cpu
         };
 
         InternalWait(7);
+    }
+
+    private void ApplyEiDelay()
+    {
+        if (m_eiDelay <= 0)
+            return;
+
+        m_eiDelay--;
+        if (m_eiDelay == 0)
+        {
+            Reg.IFF1 = true;
+            Reg.IFF2 = true;
+        }
     }
 
     public byte Fetch8()
@@ -176,7 +194,7 @@ public sealed class Cpu
     /// Known waits: opcode fetch is 4T, memory read/write is 3T per byte.
     /// </summary>
     public void InternalWait(int tStates) =>
-        TStates += tStates;
+        TStatesSinceCpuStart += tStates;
 
     public void PushPC()
     {

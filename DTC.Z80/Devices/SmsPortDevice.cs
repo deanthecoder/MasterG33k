@@ -22,12 +22,14 @@ public sealed class SmsPortDevice : IPortDevice
 {
     private readonly SmsVdp m_vdp;
     private readonly SmsJoypad m_joypad;
+    private readonly SmsMemoryController m_memoryController;
     private readonly IPortDevice m_fallback;
 
-    public SmsPortDevice(SmsVdp vdp, SmsJoypad joypad = null, IPortDevice fallback = null)
+    public SmsPortDevice(SmsVdp vdp, SmsJoypad joypad = null, SmsMemoryController memoryController = null, IPortDevice fallback = null)
     {
         m_vdp = vdp ?? throw new ArgumentNullException(nameof(vdp));
         m_joypad = joypad;
+        m_memoryController = memoryController;
         m_fallback = fallback ?? DefaultPortDevice.Instance;
     }
 
@@ -36,6 +38,8 @@ public sealed class SmsPortDevice : IPortDevice
         var port = (byte)portAddress;
         switch (port)
         {
+            case 0x3E:
+                return m_memoryController?.Control ?? 0xFF;
             case 0xBE:
             case 0xBC:
                 return m_vdp.ReadData();
@@ -59,6 +63,9 @@ public sealed class SmsPortDevice : IPortDevice
         var port = (byte)portAddress;
         switch (port)
         {
+            case 0x3E:
+                m_memoryController?.WriteControl(value);
+                return;
             case 0xBE:
                 m_vdp.WriteData(value);
                 return;

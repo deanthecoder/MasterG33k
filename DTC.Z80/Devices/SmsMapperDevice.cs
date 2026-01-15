@@ -19,41 +19,49 @@ namespace DTC.Z80.Devices;
 /// </remarks>
 public sealed class SmsMapperDevice : IMemDevice
 {
-    private readonly SmsRomDevice m_rom;
+    private readonly SmsMemoryController m_memoryController;
+    private readonly IMemDevice m_ram;
 
     public ushort FromAddr => 0xFFFC;
     public ushort ToAddr => 0xFFFF;
 
-    public SmsMapperDevice(SmsRomDevice rom)
+    public SmsMapperDevice(SmsMemoryController memoryController, IMemDevice ram)
     {
-        m_rom = rom ?? throw new ArgumentNullException(nameof(rom));
+        m_memoryController = memoryController ?? throw new ArgumentNullException(nameof(memoryController));
+        m_ram = ram ?? throw new ArgumentNullException(nameof(ram));
     }
 
-    public byte Read8(ushort addr) => addr switch
-    {
-        0xFFFC => m_rom.Control,
-        0xFFFD => m_rom.Bank0,
-        0xFFFE => m_rom.Bank1,
-        0xFFFF => m_rom.Bank2,
-        _ => 0xFF
-    };
+    public byte Read8(ushort addr) => m_ram.Read8(addr);
 
     public void Write8(ushort addr, byte value)
     {
+        m_ram.Write8(addr, value);
+        var rom = GetActiveRom();
+        if (rom == null)
+            return;
         switch (addr)
         {
             case 0xFFFC:
-                m_rom.SetControl(value);
+                rom.SetControl(value);
                 break;
             case 0xFFFD:
-                m_rom.SetBank0(value);
+                rom.SetBank0(value);
                 break;
             case 0xFFFE:
-                m_rom.SetBank1(value);
+                rom.SetBank1(value);
                 break;
             case 0xFFFF:
-                m_rom.SetBank2(value);
+                rom.SetBank2(value);
                 break;
         }
+    }
+
+    private SmsRomDevice GetActiveRom()
+    {
+        if (m_memoryController.IsBiosEnabled && m_memoryController.BiosRom != null)
+            return m_memoryController.BiosRom;
+        if (m_memoryController.IsCartridgeEnabled)
+            return m_memoryController.Cartridge;
+        return null;
     }
 }

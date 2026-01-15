@@ -24,6 +24,7 @@ using CSharp.Core.Extensions;
 using CSharp.Core.UI;
 using CSharp.Core.ViewModels;
 using DTC.Z80;
+using DTC.Z80.Debuggers;
 using DTC.Z80.Devices;
 
 namespace MasterG33k.ViewModels;
@@ -40,12 +41,16 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly SmsVdp m_vdp;
     private readonly SmsJoypad m_joypad;
     private readonly SmsMemoryController m_memoryController;
+    private readonly CpuLoopDebugger m_loopDebugger;
     private readonly Lock m_cpuStepLock = new();
     private Thread m_cpuThread;
     private bool m_shutdownRequested;
     private readonly ClockSync m_clockSync;
     private readonly LcdScreen m_screen;
     private long m_lastCpuTStates;
+    private uint m_lastFrameChecksum;
+    private long m_lastFrameTicks;
+    private bool m_hasFrameChecksum;
 
     public MruFiles Mru { get; }
     public IImage Display { get; }
@@ -109,6 +114,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 #if DEBUG
             m_cpu.InstructionLogger.IsEnabled = value;
 #endif
+            if (m_loopDebugger != null)
+                m_loopDebugger.IsEnabled = value;
         }
     }
 
@@ -126,6 +133,12 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         var portDevice = new SmsPortDevice(m_vdp, m_joypad, m_memoryController);
         m_cpu = new Cpu(new Bus(new Memory(), portDevice));
         m_cpu.Bus.Attach(m_memoryController);
+        m_loopDebugger = new CpuLoopDebugger(() =>
+        {
+            var vectorByte = m_cpu.Bus.Read8(0x0038);
+            return $"{m_vdp.GetDebugSummary()} | MemCtrl={m_memoryController.GetDebugSummary()} Vec38Map={vectorByte:X2}";
+        });
+        m_cpu.AddDebugger(m_loopDebugger);
         m_clockSync = new ClockSync(GetEffectiveCpuHz, () => m_cpu.TStatesSinceCpuStart, () => m_cpu.Reset());
         Settings.PropertyChanged += OnSettingsPropertyChanged;
         IsCpuHistoryTracked = Settings.IsCpuHistoryTracked;
@@ -194,10 +207,11 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         var biosData = biosFile.ReadAllBytes();
         if (biosData.Length > 0x4000)
         {
+            SmsRomChecksum.TryPatchChecksum(biosData, patchBothFields: true);
             var romDevice = new SmsRomDevice(biosData);
-            m_cpu.Bus.Attach(new SmsMapperDevice(romDevice));
-            m_memoryController.SetCartridge(romDevice);
-            m_memoryController.SetBios(null);
+            m_cpu.Bus.Attach(new SmsMapperDevice(m_memoryController, m_cpu.MainMemory));
+            m_memoryController.SetCartridge(romDevice, forceEnabled: false);
+            m_memoryController.SetBiosRom(romDevice);
             m_memoryController.Reset();
             LogRomInfo(biosFile, biosData, romDevice.BankCount);
             StartCpuIfNeeded();
@@ -261,6 +275,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             m_cpu.Reset();
             m_vdp.Reset();
             m_memoryController.Reset();
+            m_loopDebugger?.Reset();
             m_clockSync.Reset();
             m_lastCpuTStates = 0;
         }
@@ -272,6 +287,17 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     public void ReportCpuClockTicks() =>
         Console.WriteLine($"CPU clock ticks: {m_cpu.TStatesSinceCpuStart}");
+
+    public void ReportFrameChecksum()
+    {
+        if (!m_hasFrameChecksum)
+        {
+            Console.WriteLine($"Frame checksum: n/a (no frame rendered yet). CPU ticks: {m_cpu.TStatesSinceCpuStart}");
+            return;
+        }
+
+        Console.WriteLine($"Frame checksum: 0x{m_lastFrameChecksum:X8} @ CPU ticks {m_lastFrameTicks} (current {m_cpu.TStatesSinceCpuStart}).");
+    }
 
     public void TrackCpuHistory() => IsCpuHistoryTracked = !IsCpuHistoryTracked;
 
@@ -311,8 +337,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         StopCpu();
 
         var romDevice = new SmsRomDevice(romData);
-        m_cpu.Bus.Attach(new SmsMapperDevice(romDevice));
-        m_memoryController.SetCartridge(romDevice);
+        m_cpu.Bus.Attach(new SmsMapperDevice(m_memoryController, m_cpu.MainMemory));
+        m_memoryController.SetCartridge(romDevice, forceEnabled: false);
 
         lock (m_cpuStepLock)
         {
@@ -320,6 +346,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             m_cpu.Reset();
             m_vdp.Reset();
             m_memoryController.Reset();
+            m_loopDebugger?.Reset();
             m_clockSync.Reset();
             m_lastCpuTStates = 0;
         }
@@ -404,6 +431,9 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         if (frameBuffer == null || frameBuffer.Length == 0)
             return;
 
+        m_lastFrameChecksum = ComputeFrameChecksum(frameBuffer);
+        m_lastFrameTicks = m_cpu.TStatesSinceCpuStart;
+        m_hasFrameChecksum = true;
         m_screen.Update(frameBuffer);
         DisplayUpdated?.Invoke(this, EventArgs.Empty);
     }
@@ -411,6 +441,20 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private static double GetEffectiveCpuHz() =>
         // Master System NTSC CPU clock; we always render 256x192.
         3_579_545;
+
+    private static uint ComputeFrameChecksum(byte[] frameBuffer)
+    {
+        const uint offsetBasis = 2166136261;
+        const uint prime = 16777619;
+        var hash = offsetBasis;
+        for (var i = 0; i < frameBuffer.Length; i++)
+        {
+            hash ^= frameBuffer[i];
+            hash *= prime;
+        }
+
+        return hash;
+    }
 
     private static string SanitizeFileName(string input) =>
         string.IsNullOrWhiteSpace(input) ? "MasterG33k" : input.ToSafeFileName();

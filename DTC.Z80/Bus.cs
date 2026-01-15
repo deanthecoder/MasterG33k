@@ -28,10 +28,7 @@ public sealed class Bus
         PortDevice = portDevice ?? DefaultPortDevice.Instance;
         Attach(MainMemory);
     }
-
-    public void SetPortDevice(IPortDevice portDevice) =>
-        PortDevice = portDevice ?? throw new ArgumentNullException(nameof(portDevice));
-
+    
     public void Attach(IMemDevice device)
     {
         if (device == null)
