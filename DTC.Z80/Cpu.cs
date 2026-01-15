@@ -22,6 +22,7 @@ public sealed class Cpu
     private bool m_interruptPending;
     private int m_eiDelay;
     private readonly List<ICpuDebugger> m_debuggers = new();
+    private bool m_nmiPending;
 
     public Registers Reg { get; }
     public Registers TheRegisters { get; }
@@ -35,8 +36,10 @@ public sealed class Cpu
 
     public ushort CurrentInstructionAddress { get; private set; }
     
-    // ReSharper disable once InconsistentNaming
-    public long TStatesSinceCpuStart { get; private set; }
+    // ReSharper disable InconsistentNaming
+    public long TStates { get; private set; }
+    public long TStatesSinceCpuStart => TStates;
+    // ReSharper restore InconsistentNaming
 
     public Cpu(Bus bus)
     {
@@ -53,7 +56,7 @@ public sealed class Cpu
     {
         TheRegisters.Clear();
         IsHalted = false;
-        TStatesSinceCpuStart = 0;
+        TStates = 0;
         m_eiDelay = 0;
     }
 
@@ -102,6 +105,8 @@ public sealed class Cpu
 
     public void RequestInterrupt() => m_interruptPending = true;
 
+    public void RequestNmi() => m_nmiPending = true;
+
     internal void ScheduleEi()
     {
         Reg.IFF1 = true;
@@ -113,6 +118,21 @@ public sealed class Cpu
 
     private void ServiceInterrupts()
     {
+        // NMI has priority over maskable interrupts
+        if (m_nmiPending)
+        {
+            m_nmiPending = false;
+            IsHalted = false;
+            // On NMI, IFF1 is cleared; IFF2 retains the previous IFF1 state (already tracked)
+            Reg.IFF1 = false;
+            PushPC();
+            Reg.PC = 0x0066;
+            // Approximate timing and refresh increment on interrupt entry
+            InternalWait(7);
+            Reg.IncrementR();
+            return;
+        }
+
         if (m_eiDelay > 0)
         {
             m_eiDelay--;
@@ -135,13 +155,24 @@ public sealed class Cpu
         Reg.IFF2 = false;
 
         PushPC();
-        Reg.PC = Reg.IM switch
+        ushort target;
+        if (Reg.IM == 2)
         {
-            2 => (ushort)((Reg.I << 8) | 0xFF),
-            _ => 0x0038
-        };
+            // In IM2, fetch 16-bit target vector from I:FF (VDP drives 0xFF)
+            var vectorAddr = (ushort)((Reg.I << 8) | 0xFF);
+            target = Bus.Read16(vectorAddr);
+            // Two memory reads (approximate timing)
+            InternalWait(6);
+        }
+        else
+        {
+            // IM0/IM1 default to RST 38h
+            target = 0x0038;
+        }
 
+        Reg.PC = target;
         InternalWait(7);
+        Reg.IncrementR();
     }
 
     public byte Fetch8()
@@ -191,7 +222,7 @@ public sealed class Cpu
     /// Known waits: opcode fetch is 4T, memory read/write is 3T per byte.
     /// </summary>
     public void InternalWait(int tStates) =>
-        TStatesSinceCpuStart += tStates;
+        TStates += tStates;
 
     public void PushPC()
     {
