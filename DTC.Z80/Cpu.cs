@@ -96,19 +96,29 @@ public sealed class Cpu
             InstructionLogger.Write(() => $"{disassembly,-19}|{preRegState,-32}|{preFlags}");
         }
         instruction?.Execute(this);
-        ApplyEiDelay();
         ServiceInterrupts();
         NotifyAfterStep();
     }
 
     public void RequestInterrupt() => m_interruptPending = true;
 
-    internal void ScheduleEi() => m_eiDelay = 2;
+    internal void ScheduleEi()
+    {
+        Reg.IFF1 = true;
+        Reg.IFF2 = true;
+        m_eiDelay = 1;
+    }
 
     internal void CancelEi() => m_eiDelay = 0;
 
     private void ServiceInterrupts()
     {
+        if (m_eiDelay > 0)
+        {
+            m_eiDelay--;
+            return;
+        }
+
         if (!m_interruptPending)
             return;
 
@@ -132,19 +142,6 @@ public sealed class Cpu
         };
 
         InternalWait(7);
-    }
-
-    private void ApplyEiDelay()
-    {
-        if (m_eiDelay <= 0)
-            return;
-
-        m_eiDelay--;
-        if (m_eiDelay == 0)
-        {
-            Reg.IFF1 = true;
-            Reg.IFF2 = true;
-        }
     }
 
     public byte Fetch8()
