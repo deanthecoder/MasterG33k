@@ -47,7 +47,7 @@ public sealed class SmsVdp
     // Per-pixel metadata buffers used for correct sprite/background compositing.
     // Priority buffer: 1 when BG tile priority bit is set for the pixel; 0 otherwise.
     private readonly byte[] m_bgPriority = new byte[FrameWidth * FrameHeight];
-    // Tracks how many sprites have contributed pixels to each scanline (for 8 sprites/line rule).
+    // Tracks how many sprites are present on each scanline (for 8 sprites/line rule).
     private readonly int[] m_spritesOnLine = new int[FrameHeight];
 
     private ushort m_address;
@@ -61,6 +61,7 @@ public sealed class SmsVdp
 
     private int m_cycleAccumulator;
     private int m_vCounter;
+    private int m_lineCounter;
     private byte m_status;
     private bool m_interruptPending;
 
@@ -94,6 +95,7 @@ public sealed class SmsVdp
         m_controlWrites = 0;
         m_cycleAccumulator = 0;
         m_vCounter = 0;
+        m_lineCounter = m_registers[10];
         m_status = 0;
         m_interruptPending = false;
     }
@@ -140,7 +142,15 @@ public sealed class SmsVdp
 
     public byte ReadVCounter() => (byte)m_vCounter;
 
-    public byte ReadHCounter() => 0;
+    public byte ReadHCounter()
+    {
+        var position = (m_cycleAccumulator * 256) / CyclesPerScanline;
+        if (position < 0)
+            position = 0;
+        if (position > 255)
+            position = 255;
+        return (byte)position;
+    }
 
     public void WriteControl(byte value)
     {
@@ -161,6 +171,8 @@ public sealed class SmsVdp
             {
                 m_registers[regIndex] = m_controlLatchLow;
                 m_registerWrites++;
+                if (regIndex == 10)
+                    m_lineCounter = m_controlLatchLow;
             }
         }
         else
@@ -224,6 +236,8 @@ public sealed class SmsVdp
     private void AdvanceScanline()
     {
         m_vCounter++;
+        if (m_vCounter < VblankStartLine)
+            AdvanceLineCounter();
         if (m_vCounter == VblankStartLine)
         {
             m_status |= StatusVblankBit;
@@ -235,6 +249,20 @@ public sealed class SmsVdp
         else if (m_vCounter >= TotalScanlines)
         {
             m_vCounter = 0;
+            m_lineCounter = m_registers[10];
+        }
+    }
+
+    private void AdvanceLineCounter()
+    {
+        if (m_lineCounter > 0)
+            m_lineCounter--;
+
+        if (m_lineCounter == 0)
+        {
+            if (m_registers[0].IsBitSet(4))
+                m_interruptPending = true;
+            m_lineCounter = m_registers[10];
         }
     }
 
@@ -570,6 +598,8 @@ public sealed class SmsVdp
             return;
 
         var scale = zoom ? 2 : 1;
+        Span<int> lineYs = stackalloc int[2];
+        Span<bool> lineDraw = stackalloc bool[2];
         for (var row = 0; row < height; row++)
         {
             var tileOffset = row >= 8 ? 1 : 0;
@@ -584,6 +614,25 @@ public sealed class SmsVdp
             var destY = y + row * scale;
             if (destY >= FrameHeight)
                 break;
+
+            var maxY = Math.Min(FrameHeight, destY + scale);
+            var lineCount = 0;
+            for (var py = destY; py < maxY; py++)
+            {
+                var canDraw = m_spritesOnLine[py] < 8;
+                if (!canDraw)
+                {
+                    m_status |= 0x20; // sprite overflow
+                }
+                else
+                {
+                    m_spritesOnLine[py]++;
+                }
+
+                lineYs[lineCount] = py;
+                lineDraw[lineCount] = canDraw;
+                lineCount++;
+            }
 
             for (var col = 0; col < 8; col++)
             {
@@ -600,17 +649,13 @@ public sealed class SmsVdp
                 if (destX < 0 || destX >= FrameWidth)
                     continue;
 
-                var maxY = Math.Min(FrameHeight, destY + scale);
                 var maxX = Math.Min(FrameWidth, destX + scale);
-                for (var py = destY; py < maxY; py++)
+                for (var lineIndex = 0; lineIndex < lineCount; lineIndex++)
                 {
-                    // Enforce 8 sprites per scanline: if we've already drawn 8 sprites for this scanline,
-                    // set overflow bit and skip drawing further sprite pixels on this line.
-                    if (m_spritesOnLine[py] >= 8)
-                    {
-                        m_status |= 0x20; // sprite overflow
+                    if (!lineDraw[lineIndex])
                         continue;
-                    }
+
+                    var py = lineYs[lineIndex];
                     var rowOffset = (py * FrameWidth + destX) * 4;
                     for (var px = destX; px < maxX; px++)
                     {
@@ -618,13 +663,6 @@ public sealed class SmsVdp
                         // This ensures scaled sprite blocks respect BG priority at every covered pixel.
                         if (m_bgPriority[(py * FrameWidth) + px] != 0)
                             continue;
-
-                        // Count this sprite as present on this scanline the first time we emit a pixel on it.
-                        if (m_spritesOnLine[py] < 8)
-                        {
-                            // Increment once per contributing sprite; approximate by incrementing on first pixel.
-                            m_spritesOnLine[py]++;
-                        }
 
                         var offset = rowOffset + (px - destX) * 4;
                         m_frameBuffer[offset] = b;
