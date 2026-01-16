@@ -485,6 +485,7 @@ public sealed class SmsVdp
         const int tilesHigh = 24;
         var builder = new StringBuilder();
         var tilesToDump = new HashSet<BackgroundTileKey>();
+        var tileIndices = new HashSet<int>();
 
         for (var row = 0; row < tilesHigh; row++)
         {
@@ -507,6 +508,7 @@ public sealed class SmsVdp
                 var vFlip = high.IsBitSet(AttrBit_VFlip);
 
                 tilesToDump.Add(new BackgroundTileKey(tileIndex, palette, hFlip, vFlip));
+                tileIndices.Add(tileIndex);
 
                 if (col > 0)
                     builder.Append(' ');
@@ -519,6 +521,15 @@ public sealed class SmsVdp
         File.WriteAllText(outputFile.FullName, builder.ToString());
 
         var baseName = Path.GetFileNameWithoutExtension(outputFile.Name);
+        var summaryFile = outputFile.Directory.GetFile($"{baseName}-summary.json");
+        File.WriteAllText(summaryFile.FullName, BuildBackgroundSummaryJson(nameTableBase, patternBase, alternatePatternBase, scrollX, scrollY));
+
+        var cramFile = outputFile.Directory.GetFile($"{baseName}-cram.txt");
+        File.WriteAllText(cramFile.FullName, BuildCramDumpText());
+
+        var tileDataFile = outputFile.Directory.GetFile($"{baseName}-tiles.txt");
+        File.WriteAllText(tileDataFile.FullName, BuildBackgroundTileDataText(tileIndices, patternBase));
+
         var screenshotFile = outputFile.Directory.GetFile($"{baseName}-frame.tga");
         DumpFrame(screenshotFile);
 
@@ -532,6 +543,63 @@ public sealed class SmsVdp
                 $"{tile.TileIndex:X3}-p{tile.Palette}-h{(tile.HFlip ? 1 : 0)}-v{(tile.VFlip ? 1 : 0)}.tga");
             DumpBackgroundTile(tileFile, tile.TileIndex, patternBase, tile.Palette, tile.HFlip, tile.VFlip);
         }
+    }
+
+    private string BuildBackgroundSummaryJson(int nameTableBase, int patternBase, int alternatePatternBase, int scrollX, int scrollY)
+    {
+        var registers = string.Join(", ", m_registers.Select(value => $"\"0x{value:X2}\""));
+        var builder = new StringBuilder();
+        builder.AppendLine("{");
+        builder.AppendLine($"  \"nameTableBase\": \"0x{nameTableBase:X4}\",");
+        builder.AppendLine($"  \"patternBaseReg\": \"0x{(((m_registers[4] & 0x04) << 11) & 0x3FFF):X4}\",");
+        builder.AppendLine($"  \"patternBaseSelected\": \"0x{patternBase:X4}\",");
+        builder.AppendLine($"  \"patternBaseAlternate\": \"0x{alternatePatternBase:X4}\",");
+        builder.AppendLine($"  \"scroll\": {{ \"x\": {scrollX}, \"y\": {scrollY} }},");
+        builder.AppendLine($"  \"registers\": [{registers}]");
+        builder.AppendLine("}");
+        return builder.ToString();
+    }
+
+    private string BuildCramDumpText()
+    {
+        var builder = new StringBuilder();
+        for (var i = 0; i < m_cram.Length; i += 16)
+        {
+            builder.Append($"{i:X2}:");
+            for (var j = 0; j < 16 && i + j < m_cram.Length; j++)
+            {
+                builder.Append($" {m_cram[i + j]:X2}");
+            }
+
+            builder.AppendLine();
+        }
+
+        return builder.ToString();
+    }
+
+    private string BuildBackgroundTileDataText(IEnumerable<int> tileIndices, int patternBase)
+    {
+        var builder = new StringBuilder();
+        foreach (var tileIndex in tileIndices.OrderBy(index => index))
+        {
+            builder.AppendLine($"Tile {tileIndex:X3} (0x{tileIndex:X3})");
+            var tileBase = (patternBase + tileIndex * 32) & 0x3FFF;
+            for (var row = 0; row < 8; row++)
+            {
+                var rowAddr = (tileBase + row * 4) & 0x3FFF;
+                builder.Append($"  Row {row}:");
+                for (var plane = 0; plane < 4; plane++)
+                {
+                    builder.Append($" {m_vram[(rowAddr + plane) & 0x3FFF]:X2}");
+                }
+
+                builder.AppendLine();
+            }
+
+            builder.AppendLine();
+        }
+
+        return builder.ToString();
     }
 
     private void DumpBackgroundTile(FileInfo tgaFile, int tileIndex, int patternBase, int palette, bool hFlip, bool vFlip)
