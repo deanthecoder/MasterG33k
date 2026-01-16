@@ -518,6 +518,10 @@ public sealed class SmsVdp
 
         File.WriteAllText(outputFile.FullName, builder.ToString());
 
+        var baseName = Path.GetFileNameWithoutExtension(outputFile.Name);
+        var screenshotName = Path.Combine(outputFile.Directory.FullName, $"{baseName}-frame.tga");
+        DumpFrame(new FileInfo(screenshotName));
+
         foreach (var tile in tilesToDump
                      .OrderBy(key => key.TileIndex)
                      .ThenBy(key => key.Palette)
