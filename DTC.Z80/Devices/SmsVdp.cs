@@ -578,7 +578,9 @@ public sealed class SmsVdp
         {
             var i = indices[idx];
             var y = m_vram[(spriteTableBase + i) & 0x3FFF];
-            var spriteY = (y + 1) & 0xFF;
+            var spriteY = y + 1;
+            if (spriteY > 240)
+                spriteY -= 256;
             if (spriteY >= FrameHeight)
                 continue;
 
