@@ -530,6 +530,9 @@ public sealed class SmsVdp
         var tileDataFile = outputFile.Directory.GetFile($"{baseName}-tiles.txt");
         File.WriteAllText(tileDataFile.FullName, BuildBackgroundTileDataText(tileIndices, patternBase));
 
+        var debugFile = outputFile.Directory.GetFile($"{baseName}-debug.txt");
+        File.WriteAllText(debugFile.FullName, BuildBackgroundDebugText(0x044, nameTableBase, patternBase, alternatePatternBase, scrollX, scrollY));
+
         var screenshotFile = outputFile.Directory.GetFile($"{baseName}-frame.tga");
         DumpFrame(screenshotFile);
 
@@ -601,6 +604,76 @@ public sealed class SmsVdp
 
         return builder.ToString();
     }
+
+    private string BuildBackgroundDebugText(int focusTileIndex, int nameTableBase, int patternBase, int alternatePatternBase, int scrollX, int scrollY)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine($"Focus tile: {focusTileIndex:X3} (0x{focusTileIndex:X3})");
+        builder.AppendLine();
+        builder.AppendLine("Summary:");
+        builder.AppendLine(BuildBackgroundSummaryJson(nameTableBase, patternBase, alternatePatternBase, scrollX, scrollY));
+        builder.AppendLine();
+        builder.AppendLine("CRAM:");
+        builder.AppendLine(BuildCramDumpText());
+        builder.AppendLine();
+        builder.AppendLine("Name table occurrences (visible 32x24):");
+        AppendFocusTileOccurrences(builder, focusTileIndex, nameTableBase, scrollX, scrollY);
+        builder.AppendLine();
+        builder.AppendLine("Pattern data @ selected base:");
+        AppendFocusTilePatternData(builder, focusTileIndex, patternBase);
+        builder.AppendLine();
+        builder.AppendLine("Pattern data @ alternate base:");
+        AppendFocusTilePatternData(builder, focusTileIndex, alternatePatternBase);
+        return builder.ToString();
+    }
+
+    private void AppendFocusTileOccurrences(StringBuilder builder, int focusTileIndex, int nameTableBase, int scrollX, int scrollY)
+    {
+        var foundAny = false;
+        for (var row = 0; row < 24; row++)
+        {
+            var sourceY = (row * 8 + scrollY) & 0xFF;
+            var tileY = sourceY >> 3;
+            var rowBase = tileY * 32;
+            for (var col = 0; col < 32; col++)
+            {
+                var sourceX = (col * 8 + scrollX) & 0xFF;
+                var tileX = sourceX >> 3;
+                var entryAddr = (nameTableBase + (rowBase + tileX) * 2) & 0x3FFF;
+                var low = m_vram[entryAddr];
+                var high = m_vram[(entryAddr + 1) & 0x3FFF];
+                var tileIndex = low | (((high >> AttrBit_TileIndexMsb) & 0x01) << 8);
+                if (tileIndex != focusTileIndex)
+                    continue;
+
+                var palette = high.IsBitSet(AttrBit_Palette) ? 1 : 0;
+                var hFlip = high.IsBitSet(AttrBit_HFlip);
+                var vFlip = high.IsBitSet(AttrBit_VFlip);
+                var priority = high.IsBitSet(AttrBit_Priority);
+                builder.AppendLine($"  ({col},{row}) addr=0x{entryAddr:X4} low=0x{low:X2} high=0x{high:X2} pal={palette} h={BoolToInt(hFlip)} v={BoolToInt(vFlip)} pri={BoolToInt(priority)}");
+                foundAny = true;
+            }
+        }
+
+        if (!foundAny)
+            builder.AppendLine("  (none)");
+    }
+
+    private void AppendFocusTilePatternData(StringBuilder builder, int focusTileIndex, int patternBase)
+    {
+        var tileBase = (patternBase + focusTileIndex * 32) & 0x3FFF;
+        builder.AppendLine($"  tileBase=0x{tileBase:X4}");
+        for (var row = 0; row < 8; row++)
+        {
+            var rowAddr = (tileBase + row * 4) & 0x3FFF;
+            builder.Append($"  Row {row}:");
+            for (var plane = 0; plane < 4; plane++)
+                builder.Append($" {m_vram[(rowAddr + plane) & 0x3FFF]:X2}");
+            builder.AppendLine();
+        }
+    }
+
+    private static int BoolToInt(bool value) => value ? 1 : 0;
 
     private void DumpBackgroundTile(FileInfo tgaFile, int tileIndex, int patternBase, int palette, bool hFlip, bool vFlip)
     {
