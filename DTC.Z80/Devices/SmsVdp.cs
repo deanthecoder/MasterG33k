@@ -545,6 +545,10 @@ public sealed class SmsVdp
             var tileFile = outputFile.Directory.GetFile(
                 $"{tile.TileIndex:X3}-p{tile.Palette}-h{(tile.HFlip ? 1 : 0)}-v{(tile.VFlip ? 1 : 0)}.tga");
             DumpBackgroundTile(tileFile, tile.TileIndex, patternBase, tile.Palette, tile.HFlip, tile.VFlip);
+
+            var altTileFile = outputFile.Directory.GetFile(
+                $"{tile.TileIndex:X3}-p{tile.Palette}-h{(tile.HFlip ? 1 : 0)}-v{(tile.VFlip ? 1 : 0)}-alt.tga");
+            DumpBackgroundTile(altTileFile, tile.TileIndex, alternatePatternBase, tile.Palette, tile.HFlip, tile.VFlip);
         }
     }
 
