@@ -272,7 +272,14 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     public void OpenProjectPage() => new Uri("https://github.com/deanthecoder/MasterG33k").Open();
 
-    public void ExportTileMap() => Logger.Instance.Info("Tile map export is not implemented yet.");
+    public void ExportTileMap()
+    {
+        var prefix = SanitizeFileName(m_currentRomTitle);
+        var defaultName = $"{prefix}-tilemap.tga";
+        var command = new FileSaveCommand("Export Tile Map", "TGA Files", ["*.tga"], defaultName);
+        command.FileSelected += (_, info) => m_vdp.DumpSpriteTileMap(info);
+        command.Execute(null);
+    }
 
     public void ResetDevice()
     {

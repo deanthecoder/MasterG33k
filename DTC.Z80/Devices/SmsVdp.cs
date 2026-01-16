@@ -362,6 +362,63 @@ public sealed class SmsVdp
         TgaWriter.Write(tgaFile, rgba, FrameWidth, FrameHeight, 4);
     }
 
+    /// <summary>
+    /// Dump the sprite pattern table as a tile map to disk (.tga).
+    /// </summary>
+    public void DumpSpriteTileMap(FileInfo tgaFile)
+    {
+        if (tgaFile == null)
+            throw new ArgumentNullException(nameof(tgaFile));
+
+        const int tilesPerRow = 16;
+        const int tileSize = 8;
+        const int tileCount = 256;
+        var width = tilesPerRow * tileSize;
+        var height = (tileCount / tilesPerRow) * tileSize;
+        var buffer = new byte[width * height * 4];
+
+        var spritePatternBase = (m_registers[6] & 0x04) << 11;
+        for (var tileIndex = 0; tileIndex < tileCount; tileIndex++)
+        {
+            var tileX = (tileIndex % tilesPerRow) * tileSize;
+            var tileY = (tileIndex / tilesPerRow) * tileSize;
+            var tileBase = (spritePatternBase + tileIndex * 32) & 0x3FFF;
+
+            for (var row = 0; row < tileSize; row++)
+            {
+                var rowAddr = (tileBase + row * 4) & 0x3FFF;
+                var plane0 = m_vram[rowAddr];
+                var plane1 = m_vram[(rowAddr + 1) & 0x3FFF];
+                var plane2 = m_vram[(rowAddr + 2) & 0x3FFF];
+                var plane3 = m_vram[(rowAddr + 3) & 0x3FFF];
+
+                for (var col = 0; col < tileSize; col++)
+                {
+                    var bit = 7 - col;
+                    var colorIndex = ((plane0 >> bit) & 0x01) |
+                                     (((plane1 >> bit) & 0x01) << 1) |
+                                     (((plane2 >> bit) & 0x01) << 2) |
+                                     (((plane3 >> bit) & 0x01) << 3);
+
+                    var (b, g, r) = colorIndex == 0
+                        ? DecodeBackdropColor()
+                        : DecodeColor(1, colorIndex);
+
+                    var destX = tileX + col;
+                    var destY = tileY + row;
+                    var offset = (destY * width + destX) * 4;
+                    buffer[offset] = b;
+                    buffer[offset + 1] = g;
+                    buffer[offset + 2] = r;
+                    buffer[offset + 3] = 255;
+                }
+            }
+        }
+
+        var rgba = ConvertBgraToRgba(buffer);
+        TgaWriter.Write(tgaFile, rgba, width, height, 4);
+    }
+
     private static byte[] ConvertBgraToRgba(byte[] buffer)
     {
         var converted = new byte[buffer.Length];

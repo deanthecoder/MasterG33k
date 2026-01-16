@@ -62,8 +62,7 @@
                                   IsEnabled="False" />
                         <MenuItem Header="E_xport">
                             <MenuItem Header="Save _Screenshot..." Command="{Binding SaveScreenshot}" />
-                            <MenuItem Header="Export _TileMap..." Command="{Binding ExportTileMap}"
-                                      IsEnabled="False" />
+                            <MenuItem Header="Export _TileMap..." Command="{Binding ExportTileMap}" />
                         </MenuItem>
                         <MenuItem Header="Start _Recording" Command="{Binding StartRecording}"
                                   InputGesture="{OnPlatform 'ctrl+m', macOS='⌘+m'}"
