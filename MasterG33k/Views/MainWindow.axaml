@@ -62,8 +62,7 @@
                                   IsEnabled="False" />
                         <MenuItem Header="E_xport">
                             <MenuItem Header="Save _Screenshot..." Command="{Binding SaveScreenshot}" />
-                            <MenuItem Header="Export _TileMap..." Command="{Binding ExportTileMap}"
-                                      IsEnabled="False" />
+                            <MenuItem Header="Export _TileMap..." Command="{Binding ExportTileMap}" />
                         </MenuItem>
                         <MenuItem Header="Start _Recording" Command="{Binding StartRecording}"
                                   InputGesture="{OnPlatform 'ctrl+m', macOS='⌘+m'}"
@@ -93,14 +92,12 @@
                         </MenuItem>
                         <Separator />
                         <MenuItem Header="_Layers">
-                            <MenuItem Header="_Background" Command="{Binding ToggleBackgroundVisibility}"
-                                      IsEnabled="False">
+                            <MenuItem Header="_Background" Command="{Binding ToggleBackgroundVisibility}">
                                 <MenuItem.Icon>
                                     <avalonia:MaterialIcon Kind="Tick" IsVisible="{Binding Settings.IsBackgroundVisible}" />
                                 </MenuItem.Icon>
                             </MenuItem>
-                            <MenuItem Header="_Sprites" Command="{Binding ToggleSpriteVisibility}"
-                                      IsEnabled="False">
+                            <MenuItem Header="_Sprites" Command="{Binding ToggleSpriteVisibility}">
                                 <MenuItem.Icon>
                                     <avalonia:MaterialIcon Kind="Tick" IsVisible="{Binding Settings.AreSpritesVisible}" />
                                 </MenuItem.Icon>
