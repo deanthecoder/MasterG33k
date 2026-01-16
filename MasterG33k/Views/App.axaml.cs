@@ -66,6 +66,7 @@ public class App : Application
         if (biosFile != null)
         {
             viewModel.LoadBios(biosFile);
+            viewModel.TryLoadLastRom();
             return;
         }
 
