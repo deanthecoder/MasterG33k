@@ -148,6 +148,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         m_clockSync = new ClockSync(GetEffectiveCpuHz, () => m_cpu.TStatesSinceCpuStart, () => m_cpu.Reset());
         Settings.PropertyChanged += OnSettingsPropertyChanged;
         IsCpuHistoryTracked = Settings.IsCpuHistoryTracked;
+        ApplyLayerVisibility();
 #if DEBUG
         m_cpu.InstructionLogger.IsEnabled = IsCpuHistoryTracked;
 #endif
@@ -272,7 +273,14 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     public void OpenProjectPage() => new Uri("https://github.com/deanthecoder/MasterG33k").Open();
 
-    public void ExportTileMap() => Logger.Instance.Info("Tile map export is not implemented yet.");
+    public void ExportTileMap()
+    {
+        var prefix = SanitizeFileName(m_currentRomTitle);
+        var defaultName = $"{prefix}-tilemap.tga";
+        var command = new FileSaveCommand("Export Tile Map", "TGA Files", ["*.tga"], defaultName);
+        command.FileSelected += (_, info) => m_vdp.DumpSpriteTileMap(info);
+        command.Execute(null);
+    }
 
     public void ResetDevice()
     {
@@ -314,10 +322,22 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     {
         if (e.PropertyName == nameof(Settings.IsSoundEnabled))
             return;
+        if (e.PropertyName == nameof(Settings.IsBackgroundVisible) ||
+            e.PropertyName == nameof(Settings.AreSpritesVisible))
+        {
+            ApplyLayerVisibility();
+            return;
+        }
         if (e.PropertyName == nameof(Settings.IsCpuHistoryTracked))
         {
             IsCpuHistoryTracked = Settings.IsCpuHistoryTracked;
         }
+    }
+
+    private void ApplyLayerVisibility()
+    {
+        m_vdp.IsBackgroundVisible = Settings.IsBackgroundVisible;
+        m_vdp.AreSpritesVisible = Settings.AreSpritesVisible;
     }
 
     internal void LoadRomFile(FileInfo romFile, bool addToMru = true) =>

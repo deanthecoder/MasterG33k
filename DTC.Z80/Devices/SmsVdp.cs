@@ -66,6 +66,10 @@ public sealed class SmsVdp
 
     public event EventHandler<byte[]> FrameRendered;
 
+    public bool IsBackgroundVisible { get; set; } = true;
+
+    public bool AreSpritesVisible { get; set; } = true;
+
     public void Reset()
     {
         Array.Clear(m_vram, 0, m_vram.Length);
@@ -279,42 +283,49 @@ public sealed class SmsVdp
             var rowBase = tileY * 32;
             for (var x = 0; x < FrameWidth; x++)
             {
-                var sourceX = (x + scrollX) & 0xFF;
-                var tileX = sourceX >> 3;
-                var colInTile = sourceX & 7;
+                var (b, g, r) = DecodeBackdropColor();
+                var bgPriority = false;
+                var colorIndex = 0;
 
-                var entryAddr = (nameTableBase + (rowBase + tileX) * 2) & 0x3FFF;
-                var low = m_vram[entryAddr];
-                var high = m_vram[(entryAddr + 1) & 0x3FFF];
+                if (IsBackgroundVisible)
+                {
+                    var sourceX = (x + scrollX) & 0xFF;
+                    var tileX = sourceX >> 3;
+                    var colInTile = sourceX & 7;
 
-                var tileIndex = low | (((high >> AttrBit_TileIndexMsb) & 0x01) << 8);
-                var hFlip = high.IsBitSet(AttrBit_HFlip);
-                var vFlip = high.IsBitSet(AttrBit_VFlip);
-                var palette = high.IsBitSet(AttrBit_Palette) ? 1 : 0;
-                var bgPriority = high.IsBitSet(AttrBit_Priority); // BG priority over sprites
+                    var entryAddr = (nameTableBase + (rowBase + tileX) * 2) & 0x3FFF;
+                    var low = m_vram[entryAddr];
+                    var high = m_vram[(entryAddr + 1) & 0x3FFF];
 
-                var tileBase = (patternBase + tileIndex * 32) & 0x3FFF;
-                var sourceRow = vFlip ? 7 - rowInTile : rowInTile;
-                var rowAddr = (tileBase + sourceRow * 4) & 0x3FFF;
-                var plane0 = m_vram[rowAddr];
-                var plane1 = m_vram[(rowAddr + 1) & 0x3FFF];
-                var plane2 = m_vram[(rowAddr + 2) & 0x3FFF];
-                var plane3 = m_vram[(rowAddr + 3) & 0x3FFF];
+                    var tileIndex = low | (((high >> AttrBit_TileIndexMsb) & 0x01) << 8);
+                    var hFlip = high.IsBitSet(AttrBit_HFlip);
+                    var vFlip = high.IsBitSet(AttrBit_VFlip);
+                    var palette = high.IsBitSet(AttrBit_Palette) ? 1 : 0;
+                    bgPriority = high.IsBitSet(AttrBit_Priority); // BG priority over sprites
 
-                var bit = hFlip ? colInTile : 7 - colInTile;
-                var colorIndex = ((plane0 >> bit) & 0x01) |
+                    var tileBase = (patternBase + tileIndex * 32) & 0x3FFF;
+                    var sourceRow = vFlip ? 7 - rowInTile : rowInTile;
+                    var rowAddr = (tileBase + sourceRow * 4) & 0x3FFF;
+                    var plane0 = m_vram[rowAddr];
+                    var plane1 = m_vram[(rowAddr + 1) & 0x3FFF];
+                    var plane2 = m_vram[(rowAddr + 2) & 0x3FFF];
+                    var plane3 = m_vram[(rowAddr + 3) & 0x3FFF];
+
+                    var bit = hFlip ? colInTile : 7 - colInTile;
+                    colorIndex = ((plane0 >> bit) & 0x01) |
                                  (((plane1 >> bit) & 0x01) << 1) |
                                  (((plane2 >> bit) & 0x01) << 2) |
                                  (((plane3 >> bit) & 0x01) << 3);
 
-                var (b, g, r) = DecodeColor(palette, colorIndex);
-                if (colorIndex == 0)
-                {
-                    var (bb, bg, br) = DecodeBackdropColor();
-                    b = bb;
-                    g = bg;
-                    r = br;
+                    if (colorIndex != 0)
+                    {
+                        var decoded = DecodeColor(palette, colorIndex);
+                        b = decoded.b;
+                        g = decoded.g;
+                        r = decoded.r;
+                    }
                 }
+
                 var pixelOffset = (y * FrameWidth + x) * 4;
                 m_frameBuffer[pixelOffset] = b;
                 m_frameBuffer[pixelOffset + 1] = g;
@@ -326,7 +337,8 @@ public sealed class SmsVdp
             }
         }
 
-        RenderSprites();
+        if (AreSpritesVisible)
+            RenderSprites();
     }
 
     private (byte b, byte g, byte r) DecodeColor(int palette, int colorIndex)
@@ -360,6 +372,63 @@ public sealed class SmsVdp
             throw new ArgumentNullException(nameof(tgaFile));
         var rgba = ConvertBgraToRgba(m_frameBuffer);
         TgaWriter.Write(tgaFile, rgba, FrameWidth, FrameHeight, 4);
+    }
+
+    /// <summary>
+    /// Dump the sprite pattern table as a tile map to disk (.tga).
+    /// </summary>
+    public void DumpSpriteTileMap(FileInfo tgaFile)
+    {
+        if (tgaFile == null)
+            throw new ArgumentNullException(nameof(tgaFile));
+
+        const int tilesPerRow = 16;
+        const int tileSize = 8;
+        const int tileCount = 256;
+        var width = tilesPerRow * tileSize;
+        var height = (tileCount / tilesPerRow) * tileSize;
+        var buffer = new byte[width * height * 4];
+
+        var spritePatternBase = (m_registers[6] & 0x04) << 11;
+        for (var tileIndex = 0; tileIndex < tileCount; tileIndex++)
+        {
+            var tileX = (tileIndex % tilesPerRow) * tileSize;
+            var tileY = (tileIndex / tilesPerRow) * tileSize;
+            var tileBase = (spritePatternBase + tileIndex * 32) & 0x3FFF;
+
+            for (var row = 0; row < tileSize; row++)
+            {
+                var rowAddr = (tileBase + row * 4) & 0x3FFF;
+                var plane0 = m_vram[rowAddr];
+                var plane1 = m_vram[(rowAddr + 1) & 0x3FFF];
+                var plane2 = m_vram[(rowAddr + 2) & 0x3FFF];
+                var plane3 = m_vram[(rowAddr + 3) & 0x3FFF];
+
+                for (var col = 0; col < tileSize; col++)
+                {
+                    var bit = 7 - col;
+                    var colorIndex = ((plane0 >> bit) & 0x01) |
+                                     (((plane1 >> bit) & 0x01) << 1) |
+                                     (((plane2 >> bit) & 0x01) << 2) |
+                                     (((plane3 >> bit) & 0x01) << 3);
+
+                    var (b, g, r) = colorIndex == 0
+                        ? DecodeBackdropColor()
+                        : DecodeColor(1, colorIndex);
+
+                    var destX = tileX + col;
+                    var destY = tileY + row;
+                    var offset = (destY * width + destX) * 4;
+                    buffer[offset] = b;
+                    buffer[offset + 1] = g;
+                    buffer[offset + 2] = r;
+                    buffer[offset + 3] = 255;
+                }
+            }
+        }
+
+        var rgba = ConvertBgraToRgba(buffer);
+        TgaWriter.Write(tgaFile, rgba, width, height, 4);
     }
 
     private static byte[] ConvertBgraToRgba(byte[] buffer)
