@@ -293,13 +293,7 @@ public sealed class SmsVdp
         var nameTableBase = ((m_registers[2] & 0x0E) << 10) & 0x3FFF;
         var patternBase = ((m_registers[4] & 0x04) << 11) & 0x3FFF;
 
-        // Bring-up fallback: some BIOS/games use the alternate pattern region. Prefer whichever region actually contains the referenced tiles.
         var alternatePatternBase = patternBase ^ 0x2000;
-        var (primaryHits, alternateHits, _) = CountPatternHits(nameTableBase, patternBase, alternatePatternBase);
-        if (alternateHits > primaryHits)
-        {
-            patternBase = alternatePatternBase;
-        }
 
         var scrollX = m_registers[8];
         var scrollY = m_registers[9];
@@ -336,10 +330,7 @@ public sealed class SmsVdp
                     var palette = high.IsBitSet(AttrBit_Palette) ? 1 : 0;
                     bgPriority = high.IsBitSet(AttrBit_Priority); // BG priority over sprites
 
-                    var tilePatternBase = patternBase;
-                    if (!HasTileData(tilePatternBase, tileIndex) && HasTileData(alternatePatternBase, tileIndex))
-                        tilePatternBase = alternatePatternBase;
-                    var tileBase = (tilePatternBase + tileIndex * 32) & 0x3FFF;
+                    var tileBase = (patternBase + tileIndex * 32) & 0x3FFF;
                     var sourceRow = vFlip ? 7 - rowInTile : rowInTile;
                     var rowAddr = (tileBase + sourceRow * 4) & 0x3FFF;
                     var plane0 = m_vram[rowAddr];
@@ -479,7 +470,6 @@ public sealed class SmsVdp
         var nameTableBase = ((m_registers[2] & 0x0E) << 10) & 0x3FFF;
         var patternBase = ((m_registers[4] & 0x04) << 11) & 0x3FFF;
         var alternatePatternBase = patternBase ^ 0x2000;
-        patternBase = SelectPatternBase(nameTableBase, patternBase, alternatePatternBase);
 
         var scrollX = m_registers[8];
         var scrollY = m_registers[9];
@@ -784,12 +774,6 @@ public sealed class SmsVdp
         }
 
         return false;
-    }
-
-    private int SelectPatternBase(int nameTableBase, int primaryBase, int alternateBase)
-    {
-        var (primaryHits, alternateHits, _) = CountPatternHits(nameTableBase, primaryBase, alternateBase);
-        return alternateHits > primaryHits ? alternateBase : primaryBase;
     }
 
     private (int primaryHits, int alternateHits, int maxTile) CountPatternHits(int nameTableBase, int primaryBase, int alternateBase)
