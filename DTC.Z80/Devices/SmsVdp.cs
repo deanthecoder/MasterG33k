@@ -336,7 +336,10 @@ public sealed class SmsVdp
                     var palette = high.IsBitSet(AttrBit_Palette) ? 1 : 0;
                     bgPriority = high.IsBitSet(AttrBit_Priority); // BG priority over sprites
 
-                    var tileBase = (patternBase + tileIndex * 32) & 0x3FFF;
+                    var tilePatternBase = patternBase;
+                    if (!HasTileData(tilePatternBase, tileIndex) && HasTileData(alternatePatternBase, tileIndex))
+                        tilePatternBase = alternatePatternBase;
+                    var tileBase = (tilePatternBase + tileIndex * 32) & 0x3FFF;
                     var sourceRow = vFlip ? 7 - rowInTile : rowInTile;
                     var rowAddr = (tileBase + sourceRow * 4) & 0x3FFF;
                     var plane0 = m_vram[rowAddr];
