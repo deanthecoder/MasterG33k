@@ -92,14 +92,12 @@
                         </MenuItem>
                         <Separator />
                         <MenuItem Header="_Layers">
-                            <MenuItem Header="_Background" Command="{Binding ToggleBackgroundVisibility}"
-                                      IsEnabled="False">
+                            <MenuItem Header="_Background" Command="{Binding ToggleBackgroundVisibility}">
                                 <MenuItem.Icon>
                                     <avalonia:MaterialIcon Kind="Tick" IsVisible="{Binding Settings.IsBackgroundVisible}" />
                                 </MenuItem.Icon>
                             </MenuItem>
-                            <MenuItem Header="_Sprites" Command="{Binding ToggleSpriteVisibility}"
-                                      IsEnabled="False">
+                            <MenuItem Header="_Sprites" Command="{Binding ToggleSpriteVisibility}">
                                 <MenuItem.Icon>
                                     <avalonia:MaterialIcon Kind="Tick" IsVisible="{Binding Settings.AreSpritesVisible}" />
                                 </MenuItem.Icon>
