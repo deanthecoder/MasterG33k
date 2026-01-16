@@ -519,8 +519,8 @@ public sealed class SmsVdp
         File.WriteAllText(outputFile.FullName, builder.ToString());
 
         var baseName = Path.GetFileNameWithoutExtension(outputFile.Name);
-        var screenshotName = Path.Combine(outputFile.Directory.FullName, $"{baseName}-frame.tga");
-        DumpFrame(new FileInfo(screenshotName));
+        var screenshotFile = outputFile.Directory.GetFile($"{baseName}-frame.tga");
+        DumpFrame(screenshotFile);
 
         foreach (var tile in tilesToDump
                      .OrderBy(key => key.TileIndex)
@@ -528,10 +528,9 @@ public sealed class SmsVdp
                      .ThenBy(key => key.HFlip)
                      .ThenBy(key => key.VFlip))
         {
-            var fileName = Path.Combine(
-                outputFile.Directory.FullName,
+            var tileFile = outputFile.Directory.GetFile(
                 $"tile-{tile.TileIndex:X3}-p{tile.Palette}-h{(tile.HFlip ? 1 : 0)}-v{(tile.VFlip ? 1 : 0)}.tga");
-            DumpBackgroundTile(new FileInfo(fileName), tile.TileIndex, patternBase, tile.Palette, tile.HFlip, tile.VFlip);
+            DumpBackgroundTile(tileFile, tile.TileIndex, patternBase, tile.Palette, tile.HFlip, tile.VFlip);
         }
     }
 
