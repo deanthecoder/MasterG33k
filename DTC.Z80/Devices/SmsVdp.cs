@@ -529,7 +529,7 @@ public sealed class SmsVdp
                      .ThenBy(key => key.VFlip))
         {
             var tileFile = outputFile.Directory.GetFile(
-                $"tile-{tile.TileIndex:X3}-p{tile.Palette}-h{(tile.HFlip ? 1 : 0)}-v{(tile.VFlip ? 1 : 0)}.tga");
+                $"{tile.TileIndex:X3}-p{tile.Palette}-h{(tile.HFlip ? 1 : 0)}-v{(tile.VFlip ? 1 : 0)}.tga");
             DumpBackgroundTile(tileFile, tile.TileIndex, patternBase, tile.Palette, tile.HFlip, tile.VFlip);
         }
     }
