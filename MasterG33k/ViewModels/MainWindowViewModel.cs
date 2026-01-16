@@ -138,6 +138,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             m_pauseNmiRequested = true;
         };
         m_cpu = new Cpu(new Bus(new Memory(), portDevice));
+        m_cpu.Bus.Attach(new SmsRamMirrorDevice(m_cpu.MainMemory));
         m_cpu.Bus.Attach(m_memoryController);
         m_loopDebugger = new CpuLoopDebugger(() =>
         {
