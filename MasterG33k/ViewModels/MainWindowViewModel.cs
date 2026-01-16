@@ -230,6 +230,18 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         StartCpuIfNeeded();
     }
 
+    public void TryLoadLastRom()
+    {
+        if (string.IsNullOrWhiteSpace(Settings.LastRomPath))
+            return;
+
+        var romFile = new FileInfo(Settings.LastRomPath);
+        if (!romFile.Exists)
+            return;
+
+        LoadRomFromFile(romFile, addToMru: true);
+    }
+
     private static void LogRomInfo(FileInfo romFile, byte[] romData, int bankCount)
     {
         var name = romFile.LeafName();
@@ -359,6 +371,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         if (addToMru)
             Mru.Add(romFile);
+        Settings.LastRomPath = romFile.FullName;
 
         m_currentRomTitle = romName;
         WindowTitle = $"MasterG33k - {m_currentRomTitle}";

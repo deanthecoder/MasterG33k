@@ -27,6 +27,7 @@ public class Settings : UserSettingsBase
         AreSpritesVisible = true;
         IsCpuHistoryTracked = false;
         MruFiles = string.Empty;
+        LastRomPath = string.Empty;
     }
 
     public bool IsSoundEnabled
@@ -61,6 +62,12 @@ public class Settings : UserSettingsBase
     }
 
     public string MruFiles
+    {
+        get => Get<string>();
+        set => Set(value);
+    }
+
+    public string LastRomPath
     {
         get => Get<string>();
         set => Set(value);
