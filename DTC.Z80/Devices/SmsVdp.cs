@@ -529,6 +529,8 @@ public sealed class SmsVdp
             return;
 
         var scale = zoom ? 2 : 1;
+        Span<int> lineYs = stackalloc int[2];
+        Span<bool> lineDraw = stackalloc bool[2];
         for (var row = 0; row < height; row++)
         {
             var tileOffset = row >= 8 ? 1 : 0;
@@ -545,8 +547,6 @@ public sealed class SmsVdp
                 break;
 
             var maxY = Math.Min(FrameHeight, destY + scale);
-            Span<int> lineYs = stackalloc int[2];
-            Span<bool> lineDraw = stackalloc bool[2];
             var lineCount = 0;
             for (var py = destY; py < maxY; py++)
             {
