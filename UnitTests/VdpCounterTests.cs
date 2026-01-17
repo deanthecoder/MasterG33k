@@ -17,12 +17,12 @@ namespace UnitTests;
 public sealed class VdpCounterTests
 {
     [Test]
-    public void ReadHCounterReturnsScanlineProgress()
+    public void CheckReadHCounterReturnsScanlineProgress()
     {
         var vdp = new SmsVdp();
         vdp.Reset();
 
-        Assert.That(vdp.ReadHCounter(), Is.EqualTo(0));
+        Assert.That(vdp.ReadHCounter(), Is.Zero);
 
         vdp.AdvanceCycles(114);
 
@@ -30,7 +30,7 @@ public sealed class VdpCounterTests
     }
 
     [Test]
-    public void LineInterruptReloadsAndSignalsAtCounterZero()
+    public void GivenLineInterruptEnabledCheckReloadsAndSignalsAtCounterZero()
     {
         var vdp = new SmsVdp();
         vdp.Reset();

@@ -50,9 +50,12 @@ public sealed class SmsPortDevice : IPortDevice
                 return m_vdp.ReadVCounter();
             case 0x7F:
                 return m_vdp.ReadHCounter();
+            case 0xC0:
             case 0xDC:
+                return ReadJoypadPortA();
+            case 0xC1:
             case 0xDD:
-                return ReadJoypad();
+                return ReadJoypadPortB();
             default:
                 return m_fallback.Read8(portAddress);
         }
@@ -78,13 +81,18 @@ public sealed class SmsPortDevice : IPortDevice
             case 0xBD:
                 m_vdp.WriteControl(value);
                 return;
+            case 0xC0:
+            case 0xC1:
+            case 0xDC:
+            case 0xDD:
+                return; // Write-protected joypad ports.
             default:
                 m_fallback.Write8(portAddress, value);
                 return;
         }
     }
 
-    private byte ReadJoypad()
+    private byte ReadJoypadPortA()
     {
         var state = m_joypad?.GetPressedButtons() ?? SmsJoypad.SmsJoypadButtons.None;
         var value = (byte)0xFF;
@@ -104,4 +112,6 @@ public sealed class SmsPortDevice : IPortDevice
 
         return value;
     }
+
+    private byte ReadJoypadPortB() => 0xFF;
 }

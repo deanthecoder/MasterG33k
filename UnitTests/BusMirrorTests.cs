@@ -18,7 +18,7 @@ namespace UnitTests;
 public sealed class BusMirrorTests
 {
     [Test]
-    public void ReadsFromMirrorReturnRamContent()
+    public void CheckReadsFromMirrorReturnRamContent()
     {
         var memory = new Memory();
         var bus = new Bus(memory);
@@ -31,7 +31,7 @@ public sealed class BusMirrorTests
     }
 
     [Test]
-    public void WritesToMirrorUpdateBaseRam()
+    public void CheckWritesToMirrorUpdateBaseRam()
     {
         var bus = new Bus(new Memory());
         bus.Attach(new SmsRamMirrorDevice(bus.MainMemory));
@@ -42,7 +42,7 @@ public sealed class BusMirrorTests
     }
 
     [Test]
-    public void MirrorUpperBoundMapsToRamEnd()
+    public void CheckMirrorUpperBoundMapsToRamEnd()
     {
         var bus = new Bus(new Memory());
         bus.Attach(new SmsRamMirrorDevice(bus.MainMemory));

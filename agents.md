@@ -57,6 +57,8 @@ Avoid unnecessary token use; prefer referencing this document instead of re-pars
 
 * Nullable : disabled
 * Tests    : NUnit
+* Test Naming : Prefer `Check...()` or `GivenFooCheckBar()` method names.
+* Test Assertions : Prefer `Is.Zero`, `Is.Not.Null`, `Does.Exist`, and `Has.Length.EqualTo(...)` where applicable.
 * Mocking  : Unknown
 * UI       : Avalonia
 ## Projects

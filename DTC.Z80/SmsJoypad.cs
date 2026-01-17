@@ -31,13 +31,19 @@ public sealed class SmsJoypad : IDisposable
     public event EventHandler PausePressed;
 
     public SmsJoypad()
+        : this(startHook: true)
+    {
+    }
+
+    internal SmsJoypad(bool startHook)
     {
         m_keyboardHook = new SimpleGlobalHook();
         m_keyboardHook.KeyPressed += (_, args) => HandleKey(args.Data.KeyCode, true);
         m_keyboardHook.KeyReleased += (_, args) => HandleKey(args.Data.KeyCode, false);
         m_autoFireTimer = new Timer(_ => AutoFireTick(), null, Timeout.Infinite, Timeout.Infinite);
 
-        m_keyboardHook.RunAsync();
+        if (startHook)
+            m_keyboardHook.RunAsync();
     }
 
     /// <summary>
@@ -68,6 +74,9 @@ public sealed class SmsJoypad : IDisposable
 
     public IDisposable CreatePressBlocker() =>
         new PressBlocker(this);
+
+    internal void InjectKey(KeyCode keyCode, bool isPressed) =>
+        HandleKey(keyCode, isPressed);
 
     private void HandleKey(KeyCode keyCode, bool isPressed)
     {

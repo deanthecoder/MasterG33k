@@ -18,7 +18,7 @@ namespace UnitTests;
 public sealed class CpuInterruptTests
 {
     [Test]
-    public void Im2InterruptFetchesVectorFromIRegister()
+    public void GivenIm2EnabledCheckInterruptFetchesVectorFromIRegister()
     {
         var bus = new Bus(new Memory());
         var cpu = new Cpu(bus);
@@ -50,7 +50,7 @@ public sealed class CpuInterruptTests
     }
 
     [Test]
-    public void NmiInterruptsOverrideMaskableInterrupts()
+    public void GivenPendingNmiAndIrqCheckNmiOverridesMaskableInterrupts()
     {
         var bus = new Bus(new Memory());
         var cpu = new Cpu(bus);

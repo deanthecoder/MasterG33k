@@ -18,7 +18,7 @@ namespace UnitTests;
 public sealed class BusRomAndPagingTests
 {
     [Test]
-    public void WritesToRomAreIgnored()
+    public void CheckWritesToRomAreIgnored()
     {
         var memory = new Memory();
         var bus = new Bus(memory);
@@ -37,7 +37,7 @@ public sealed class BusRomAndPagingTests
     }
 
     [Test]
-    public void WritesToMapperRegistersPageRomBanks()
+    public void CheckWritesToMapperRegistersPageRomBanks()
     {
         var memory = new Memory();
         var bus = new Bus(memory);

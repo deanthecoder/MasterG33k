@@ -28,7 +28,7 @@ public sealed class BiosBootTests : TestsBase
     private const long SoftwareErrorWindowStart = 30_000_000;
 
     [Test]
-    public void BootsToSegaScreen()
+    public void GivenBiosAvailableCheckBootsToSegaScreen()
     {
         var biosFile = ResolveBiosFile();
         Assume.That(biosFile, Does.Exist, "Set MASTERG33K_BIOS_PATH or copy a BIOS .sms into MasterG33k/BIOS.");
@@ -44,7 +44,7 @@ public sealed class BiosBootTests : TestsBase
     }
 
     [Test]
-    public void DoesNotShowSoftwareError()
+    public void GivenBiosAvailableCheckDoesNotShowSoftwareError()
     {
         var biosFile = ResolveBiosFile();
         Assume.That(biosFile, Does.Exist, "Set MASTERG33K_BIOS_PATH or copy a BIOS .sms into MasterG33k/BIOS.");
