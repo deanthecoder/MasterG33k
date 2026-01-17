@@ -7,7 +7,6 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
-
 using DTC.Z80.Devices;
 
 namespace DTC.Z80;

@@ -8,7 +8,6 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
-
 namespace DTC.Z80.Devices;
 
 /// <summary>
@@ -27,8 +26,8 @@ public sealed class SmsMemoryController : IMemDevice
     public ushort ToAddr => 0xBFFF;
 
     public void Reset()
-        // Power-on defaults: BIOS, RAM and IO enabled; expansion/card/cartridge disabled.
     {
+        // Power-on defaults: BIOS, RAM and IO enabled; expansion/card/cartridge disabled.
         m_port3E = (byte)((m_bios == null && m_biosRom == null) ? 0x00 : 0xE0);
         if (m_forceCartridgeEnabled)
             m_port3E = (byte)(m_port3E & ~0x40);

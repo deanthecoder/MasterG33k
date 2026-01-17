@@ -8,7 +8,6 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
-
 namespace DTC.Z80.Devices;
 
 /// <summary>
@@ -42,6 +41,7 @@ public sealed class SmsRomDevice : IMemDevice
 
         m_data = data;
         m_bankCount = Math.Max(1, (data.Length + BankSize - 1) / BankSize);
+
         // SMS expectation: slot 0 = bank 0; slot 1 = bank 1 (or 0 if single bank);
         // slot 2 (0x8000-0xBFFF) defaults to the last bank of the ROM.
         SetBank0(0);

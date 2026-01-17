@@ -7,7 +7,6 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
-
 using CSharp.Core.Image;
 
 using CSharp.Core.Extensions;
@@ -33,20 +32,22 @@ public sealed class SmsVdp
     private const int VblankStartLine = 192;
     private const byte StatusVblankBit = 0x80;
 
-    // Item (4): Background tile attribute bit positions in Mode 4
-    private const int AttrBit_TileIndexMsb = 0;   // Name table high byte bit 0 -> tile index bit 8
-    private const int AttrBit_HFlip        = 1;   // Horizontal flip
-    private const int AttrBit_VFlip        = 2;   // Vertical flip
-    private const int AttrBit_Palette      = 3;   // Palette select (0/1)
-    private const int AttrBit_Priority     = 4;   // BG priority over sprites
+    // Background tile attribute bit positions in Mode 4
+    private const int AttrBitTileIndexMsb = 0;   // Name table high byte bit 0 -> tile index bit 8
+    private const int AttrBitHFlip        = 1;   // Horizontal flip
+    private const int AttrBitVFlip        = 2;   // Vertical flip
+    private const int AttrBitPalette      = 3;   // Palette select (0/1)
+    private const int AttrBitPriority     = 4;   // BG priority over sprites
 
     private readonly byte[] m_vram = new byte[VramSize];
     private readonly byte[] m_cram = new byte[CramSize];
     private readonly byte[] m_registers = new byte[RegisterCount];
     private readonly byte[] m_frameBuffer = new byte[FrameWidth * FrameHeight * 4];
+
     // Per-pixel metadata buffers used for correct sprite/background compositing.
     // Priority buffer: 1 when BG tile priority bit is set for the pixel; 0 otherwise.
     private readonly byte[] m_bgPriority = new byte[FrameWidth * FrameHeight];
+
     // Tracks how many sprites are present on each scanline (for 8 sprites/line rule).
     private readonly int[] m_spritesOnLine = new int[FrameHeight];
 
@@ -325,11 +326,11 @@ public sealed class SmsVdp
                     var low = m_vram[entryAddr];
                     var high = m_vram[(entryAddr + 1) & 0x3FFF];
 
-                    var tileIndex = low | (((high >> AttrBit_TileIndexMsb) & 0x01) << 8);
-                    var hFlip = high.IsBitSet(AttrBit_HFlip);
-                    var vFlip = high.IsBitSet(AttrBit_VFlip);
-                    var palette = high.IsBitSet(AttrBit_Palette) ? 1 : 0;
-                    bgPriority = high.IsBitSet(AttrBit_Priority); // BG priority over sprites
+                    var tileIndex = low | (((high >> AttrBitTileIndexMsb) & 0x01) << 8);
+                    var hFlip = high.IsBitSet(AttrBitHFlip);
+                    var vFlip = high.IsBitSet(AttrBitVFlip);
+                    var palette = high.IsBitSet(AttrBitPalette) ? 1 : 0;
+                    bgPriority = high.IsBitSet(AttrBitPriority); // BG priority over sprites
 
                     var tileBase = (patternBase + tileIndex * 32) & 0x3FFF;
                     var sourceRow = vFlip ? 7 - rowInTile : rowInTile;
@@ -522,12 +523,6 @@ public sealed class SmsVdp
         return false;
     }
 
-    private int SelectPatternBase(int nameTableBase, int primaryBase, int alternateBase)
-    {
-        var (primaryHits, alternateHits, _) = CountPatternHits(nameTableBase, primaryBase, alternateBase);
-        return alternateHits > primaryHits ? alternateBase : primaryBase;
-    }
-
     private (int primaryHits, int alternateHits, int maxTile) CountPatternHits(int nameTableBase, int primaryBase, int alternateBase)
     {
         var primaryHits = 0;
@@ -542,7 +537,7 @@ public sealed class SmsVdp
             if (low == 0 && high == 0)
                 continue;
 
-            var tileIndex = low | (((high >> AttrBit_TileIndexMsb) & 0x01) << 8);
+            var tileIndex = low | (((high >> AttrBitTileIndexMsb) & 0x01) << 8);
             if (tileIndex > maxTile)
                 maxTile = tileIndex;
 
@@ -563,6 +558,7 @@ public sealed class SmsVdp
         var spriteHeight = (m_registers[1] & 0x02) != 0 ? 16 : 8;
         var zoom = m_registers[1].IsBitSet(0);
         var spriteShift = m_registers[0].IsBitSet(3) ? -8 : 0;
+
         // Build list until terminator (0xD0), then draw in reverse order so low indices appear on top.
         Span<int> indices = stackalloc int[64];
         var count = 0;

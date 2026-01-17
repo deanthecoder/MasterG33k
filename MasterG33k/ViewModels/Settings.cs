@@ -7,7 +7,6 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
-
 using CSharp.Core.Settings;
 
 namespace MasterG33k.ViewModels;

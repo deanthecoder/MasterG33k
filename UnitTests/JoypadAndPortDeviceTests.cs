@@ -8,7 +8,6 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
-
 using DTC.Z80;
 using DTC.Z80.Devices;
 using SharpHook.Native;
@@ -23,7 +22,7 @@ public sealed class JoypadAndPortDeviceTests
     {
         using var joypad = new SmsJoypad(startHook: false);
         var count = 0;
-        joypad.PausePressed += (_, __) => count++;
+        joypad.PausePressed += (_, _) => count++;
 
         joypad.InjectKey(KeyCode.VcP, isPressed: true);
         joypad.InjectKey(KeyCode.VcP, isPressed: false);

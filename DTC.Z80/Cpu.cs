@@ -7,7 +7,6 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
-
 using System.Diagnostics;
 using DTC.Z80.Debuggers;
 using DTC.Z80.Devices;
@@ -39,8 +38,8 @@ public sealed class Cpu
     // ReSharper disable InconsistentNaming
     public long TStates { get; private set; }
     public long TStatesSinceCpuStart => TStates;
-    // ReSharper restore InconsistentNaming
 
+    // ReSharper restore InconsistentNaming
     public Cpu(Bus bus)
     {
         Bus = bus ?? throw new ArgumentNullException(nameof(bus));
@@ -123,10 +122,12 @@ public sealed class Cpu
         {
             m_nmiPending = false;
             IsHalted = false;
+
             // On NMI, IFF1 is cleared; IFF2 retains the previous IFF1 state (already tracked)
             Reg.IFF1 = false;
             PushPC();
             Reg.PC = 0x0066;
+
             // Approximate timing and refresh increment on interrupt entry
             InternalWait(7);
             Reg.IncrementR();
@@ -161,6 +162,7 @@ public sealed class Cpu
             // In IM2, fetch 16-bit target vector from I:FF (VDP drives 0xFF)
             var vectorAddr = (ushort)((Reg.I << 8) | 0xFF);
             target = Bus.Read16(vectorAddr);
+
             // Two memory reads (approximate timing)
             InternalWait(6);
         }

@@ -59,6 +59,7 @@ Avoid unnecessary token use; prefer referencing this document instead of re-pars
 * Tests    : NUnit
 * Test Naming : Prefer `Check...()` or `GivenFooCheckBar()` method names.
 * Test Assertions : Prefer `Is.Zero`, `Is.Not.Null`, `Does.Exist`, and `Has.Length.EqualTo(...)` where applicable.
+* Comment Style : For `//` comments inside methods, add a blank line before the comment (unless directly after a brace), and avoid a blank line immediately after the comment.
 * Mocking  : Unknown
 * UI       : Avalonia
 ## Projects

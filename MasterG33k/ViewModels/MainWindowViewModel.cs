@@ -7,7 +7,6 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
-
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -132,7 +131,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         m_joypad = new SmsJoypad();
         m_memoryController = new SmsMemoryController();
         var portDevice = new SmsPortDevice(m_vdp, m_joypad, m_memoryController);
-        m_joypad.PausePressed += (_, __) =>
+        m_joypad.PausePressed += (_, _) =>
         {
             // Map Pause to NMI on the CPU without blocking the UI thread.
             m_pauseNmiRequested = true;
@@ -483,8 +482,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         DisplayUpdated?.Invoke(this, EventArgs.Empty);
     }
 
+    // Master System NTSC CPU clock; we always render 256x192.
     private static double GetEffectiveCpuHz() =>
-        // Master System NTSC CPU clock; we always render 256x192.
         3_579_545;
 
     private static uint ComputeFrameChecksum(byte[] frameBuffer)

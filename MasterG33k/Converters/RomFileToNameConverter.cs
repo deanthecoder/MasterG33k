@@ -8,7 +8,6 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
-
 using System;
 using System.Globalization;
 using Avalonia.Data.Converters;
