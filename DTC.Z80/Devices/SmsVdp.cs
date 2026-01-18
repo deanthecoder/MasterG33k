@@ -7,6 +7,7 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
+using CSharp.Core;
 using CSharp.Core.Image;
 
 using CSharp.Core.Extensions;
@@ -62,6 +63,7 @@ public sealed class SmsVdp
     private int m_lineCounter;
     private byte m_status;
     private bool m_interruptPending;
+    private bool m_wasMode4;
 
     public event EventHandler<byte[]> FrameRendered;
 
@@ -93,6 +95,7 @@ public sealed class SmsVdp
         m_lineCounter = m_registers[10];
         m_status = 0;
         m_interruptPending = false;
+        m_wasMode4 = true;
     }
 
     public void AdvanceCycles(long tStates)
@@ -181,6 +184,7 @@ public sealed class SmsVdp
                 m_registers[regIndex] = m_controlLatchLow;
                 if (regIndex == 10)
                     m_lineCounter = m_controlLatchLow;
+                MonitorVdpMode();
             }
         }
         else
@@ -203,6 +207,20 @@ public sealed class SmsVdp
         }
 
         m_isControlLatchFull = false;
+    }
+
+    private void MonitorVdpMode()
+    {
+        // Mode 4 is enabled by setting Reg 0 bit 2 (M4). Sega docs also recommend keeping Reg 0 bit 1 set in Mode 4.
+        var isMode4 = m_registers[0].IsBitSet(2);
+
+        if (isMode4 == m_wasMode4)
+            return;
+
+        m_wasMode4 = isMode4;
+
+        var modeText = isMode4 ? "Mode 4" : "Non-Mode4";
+        Logger.Instance.Warn($"[VDP] Mode changed to {modeText}. R0=0x{m_registers[0]:X2} R1=0x{m_registers[1]:X2} line={m_vCounter}.");
     }
 
     private void AdvanceScanline()
