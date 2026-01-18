@@ -289,11 +289,11 @@ public sealed class SmsVdp
 
     private void RenderFrame()
     {
-        // Use the VDP registers directly. Heuristics are useful for bring-up, but can break when games switch tables mid-frame or between screens.
         var nameTableBase = ((m_registers[2] & 0x0E) << 10) & 0x3FFF;
         var patternBase = ((m_registers[4] & 0x04) << 11) & 0x3FFF;
 
         var alternatePatternBase = patternBase ^ 0x2000;
+        patternBase = SelectPatternBase(nameTableBase, patternBase, alternatePatternBase);
 
         var scrollX = m_registers[8];
         var scrollY = m_registers[9];
@@ -774,6 +774,12 @@ public sealed class SmsVdp
         }
 
         return false;
+    }
+
+    private int SelectPatternBase(int nameTableBase, int primaryBase, int alternateBase)
+    {
+        var (primaryHits, alternateHits, _) = CountPatternHits(nameTableBase, primaryBase, alternateBase);
+        return alternateHits > primaryHits ? alternateBase : primaryBase;
     }
 
     private (int primaryHits, int alternateHits, int maxTile) CountPatternHits(int nameTableBase, int primaryBase, int alternateBase)
