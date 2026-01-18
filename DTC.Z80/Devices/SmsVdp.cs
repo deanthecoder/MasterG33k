@@ -407,7 +407,8 @@ public sealed class SmsVdp
 
     private (byte b, byte g, byte r) DecodeBackdropColor()
     {
-        var index = m_registers[7] & 0x0F;
+        // Mode 4: Reg 7 selects the backdrop/overscan colour from the sprite palette (CRAM 16-31).
+        var index = (m_registers[7] & 0x0F) | 0x10;
         var value = m_cram[index & 0x1F];
         var r = (byte)((value & 0x03) * 85);
         var g = (byte)(((value >> 2) & 0x03) * 85);
