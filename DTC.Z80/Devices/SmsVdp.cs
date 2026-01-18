@@ -328,11 +328,13 @@ public sealed class SmsVdp
             BeginFrame();
         }
 
+        var displayEnabled = m_registers[1].IsBitSet(6);
+
         // Visible area work.
         if (line < VblankStartLine)
         {
             AdvanceLineCounter();
-            RenderBackgroundScanline(line);
+            RenderBackgroundScanline(line, displayEnabled);
         }
 
         // Advance to next line.
@@ -346,7 +348,7 @@ public sealed class SmsVdp
 
             // Composite sprites once the background priority buffer is fully populated.
             if (AreSpritesVisible)
-                RenderSprites();
+                RenderSprites(displayEnabled);
 
             FrameRendered?.Invoke(this, m_frameBuffer);
         }
@@ -388,7 +390,7 @@ public sealed class SmsVdp
         Array.Clear(m_spriteMaskPerLine, 0, m_spriteMaskPerLine.Length);
     }
 
-    private void RenderBackgroundScanline(int y)
+    private void RenderBackgroundScanline(int y, bool displayEnabled)
     {
         // Use the VDP registers directly.
         var nameTableBase = ((m_registers[2] & 0x0E) << 10) & 0x3FFF;
@@ -410,9 +412,27 @@ public sealed class SmsVdp
         // (3) Left column blanking (8 pixels) when enabled.
         var isLeftColumnBlanked = m_registers[0].IsBitSet(5);
 
+        if (!displayEnabled || !IsBackgroundVisible)
+        {
+            var (bb, bg, br) = DecodeBackdropColor();
+            for (var x = 0; x < FrameWidth; x++)
+            {
+                var offset = (y * FrameWidth + x) * 4;
+                m_frameBuffer[offset] = bb;
+                m_frameBuffer[offset + 1] = bg;
+                m_frameBuffer[offset + 2] = br;
+                m_frameBuffer[offset + 3] = 255;
+                m_bgPriority[(y * FrameWidth) + x] = 0;
+            }
+
+            return;
+        }
+
         for (var x = 0; x < FrameWidth; x++)
         {
-            var (b, g, r) = DecodeBackdropColor();
+            var b = (byte)0;
+            var g = (byte)0;
+            var r = (byte)0;
             var bgPriority = false;
             var colorIndex = 0;
 
@@ -472,13 +492,10 @@ public sealed class SmsVdp
                              (((plane2 >> bit) & 0x01) << 2) |
                              (((plane3 >> bit) & 0x01) << 3);
 
-                if (colorIndex != 0)
-                {
-                    var decoded = DecodeColor(palette, colorIndex);
-                    b = decoded.b;
-                    g = decoded.g;
-                    r = decoded.r;
-                }
+                var decoded = DecodeColor(palette, colorIndex);
+                b = decoded.b;
+                g = decoded.g;
+                r = decoded.r;
             }
 
             var pixelOffset = (y * FrameWidth + x) * 4;
@@ -851,7 +868,7 @@ public sealed class SmsVdp
 
     private readonly record struct BackgroundTileKey(int TileIndex, int Palette, bool HFlip, bool VFlip);
 
-    private void RenderSprites()
+    private void RenderSprites(bool displayEnabled)
     {
         var spriteTableBase = (m_registers[5] & 0x7E) << 7;
         var spritePatternBase = (m_registers[6] & 0x04) << 11;
@@ -906,6 +923,9 @@ public sealed class SmsVdp
                 }
             }
         }
+
+        if (!displayEnabled)
+            return;
 
         for (var idx = count - 1; idx >= 0; idx--)
         {
