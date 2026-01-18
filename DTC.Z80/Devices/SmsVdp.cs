@@ -77,7 +77,7 @@ public sealed class SmsVdp
 
         // Approx power-on defaults. These keep name/sprite tables in the expected high VRAM regions for early BIOS bring-up.
         m_registers[2] = 0xFF; // Name table base -> 0x3800.
-        m_registers[4] = 0xFF; // Pattern base bit set (commonly 0x0000/0x2000 depending on mode); corrected by fallback in RenderFrame().
+        m_registers[4] = 0xFF; // Pattern/colour table base (used by legacy VDP modes; Mode 4 BG tiles are addressed as tileIndex*32).
         m_registers[5] = 0xFF; // Sprite attribute table base -> 0x3F00.
         m_registers[6] = 0xFF; // Sprite pattern base bit.
         Array.Clear(m_frameBuffer, 0, m_frameBuffer.Length);
@@ -207,15 +207,34 @@ public sealed class SmsVdp
 
     private void AdvanceScanline()
     {
-        m_vCounter++;
-        if (m_vCounter < VblankStartLine)
+        var line = m_vCounter;
+
+        // Start-of-frame housekeeping.
+        if (line == 0)
+        {
+            BeginFrame();
+        }
+
+        // Visible area work.
+        if (line < VblankStartLine)
+        {
             AdvanceLineCounter();
+            RenderBackgroundScanline(line);
+        }
+
+        // Advance to next line.
+        m_vCounter++;
+
         if (m_vCounter == VblankStartLine)
         {
             m_status |= StatusVblankBit;
             if ((m_registers[1] & 0x20) != 0)
                 m_interruptPending = true;
-            RenderFrame();
+
+            // Composite sprites once the background priority buffer is fully populated.
+            if (AreSpritesVisible)
+                RenderSprites();
+
             FrameRendered?.Invoke(this, m_frameBuffer);
         }
         else if (m_vCounter >= TotalScanlines)
@@ -247,9 +266,16 @@ public sealed class SmsVdp
         return true;
     }
 
-    private void RenderFrame()
+    private void BeginFrame()
     {
-        // Use the VDP registers directly. Heuristics are useful for bring-up, but can break when games switch tables mid-frame or between screens.
+        Array.Clear(m_frameBuffer, 0, m_frameBuffer.Length);
+        Array.Clear(m_bgPriority, 0, m_bgPriority.Length);
+        Array.Clear(m_spritesOnLine, 0, m_spritesOnLine.Length);
+    }
+
+    private void RenderBackgroundScanline(int y)
+    {
+        // Use the VDP registers directly.
         var nameTableBase = ((m_registers[2] & 0x0E) << 10) & 0x3FFF;
 
         // Mode 4: Background tile pattern addresses are derived directly from the tile index.
@@ -258,74 +284,64 @@ public sealed class SmsVdp
         var scrollX = m_registers[8];
         var scrollY = m_registers[9];
 
-        // Clear per-frame metadata buffers.
-        Array.Clear(m_bgPriority, 0, m_bgPriority.Length);
-        Array.Clear(m_spritesOnLine, 0, m_spritesOnLine.Length);
+        var sourceY = (y + scrollY) & 0xFF;
+        var tileY = sourceY >> 3;
+        var rowInTile = sourceY & 7;
+        var rowBase = tileY * 32;
 
-        for (var y = 0; y < FrameHeight; y++)
+        for (var x = 0; x < FrameWidth; x++)
         {
-            var sourceY = (y + scrollY) & 0xFF;
-            var tileY = sourceY >> 3;
-            var rowInTile = sourceY & 7;
-            var rowBase = tileY * 32;
-            for (var x = 0; x < FrameWidth; x++)
+            var (b, g, r) = DecodeBackdropColor();
+            var bgPriority = false;
+            var colorIndex = 0;
+
+            if (IsBackgroundVisible)
             {
-                var (b, g, r) = DecodeBackdropColor();
-                var bgPriority = false;
-                var colorIndex = 0;
+                var sourceX = (x + scrollX) & 0xFF;
+                var tileX = sourceX >> 3;
+                var colInTile = sourceX & 7;
 
-                if (IsBackgroundVisible)
+                var entryAddr = (nameTableBase + (rowBase + tileX) * 2) & 0x3FFF;
+                var low = m_vram[entryAddr];
+                var high = m_vram[(entryAddr + 1) & 0x3FFF];
+
+                var tileIndex = low | (((high >> AttrBitTileIndexMsb) & 0x01) << 8);
+                var hFlip = high.IsBitSet(AttrBitHFlip);
+                var vFlip = high.IsBitSet(AttrBitVFlip);
+                var palette = high.IsBitSet(AttrBitPalette) ? 1 : 0;
+                bgPriority = high.IsBitSet(AttrBitPriority);
+
+                var tileBase = (tileIndex * 32) & 0x3FFF;
+                var sourceRow = vFlip ? 7 - rowInTile : rowInTile;
+                var rowAddr = (tileBase + sourceRow * 4) & 0x3FFF;
+                var plane0 = m_vram[rowAddr];
+                var plane1 = m_vram[(rowAddr + 1) & 0x3FFF];
+                var plane2 = m_vram[(rowAddr + 2) & 0x3FFF];
+                var plane3 = m_vram[(rowAddr + 3) & 0x3FFF];
+
+                var bit = hFlip ? colInTile : 7 - colInTile;
+                colorIndex = ((plane0 >> bit) & 0x01) |
+                             (((plane1 >> bit) & 0x01) << 1) |
+                             (((plane2 >> bit) & 0x01) << 2) |
+                             (((plane3 >> bit) & 0x01) << 3);
+
+                if (colorIndex != 0)
                 {
-                    var sourceX = (x + scrollX) & 0xFF;
-                    var tileX = sourceX >> 3;
-                    var colInTile = sourceX & 7;
-
-                    var entryAddr = (nameTableBase + (rowBase + tileX) * 2) & 0x3FFF;
-                    var low = m_vram[entryAddr];
-                    var high = m_vram[(entryAddr + 1) & 0x3FFF];
-
-                    var tileIndex = low | (((high >> AttrBitTileIndexMsb) & 0x01) << 8);
-                    var hFlip = high.IsBitSet(AttrBitHFlip);
-                    var vFlip = high.IsBitSet(AttrBitVFlip);
-                    var palette = high.IsBitSet(AttrBitPalette) ? 1 : 0;
-                    bgPriority = high.IsBitSet(AttrBitPriority); // BG priority over sprites
-
-                    var tileBase = (tileIndex * 32) & 0x3FFF;
-                    var sourceRow = vFlip ? 7 - rowInTile : rowInTile;
-                    var rowAddr = (tileBase + sourceRow * 4) & 0x3FFF;
-                    var plane0 = m_vram[rowAddr];
-                    var plane1 = m_vram[(rowAddr + 1) & 0x3FFF];
-                    var plane2 = m_vram[(rowAddr + 2) & 0x3FFF];
-                    var plane3 = m_vram[(rowAddr + 3) & 0x3FFF];
-
-                    var bit = hFlip ? colInTile : 7 - colInTile;
-                    colorIndex = ((plane0 >> bit) & 0x01) |
-                                 (((plane1 >> bit) & 0x01) << 1) |
-                                 (((plane2 >> bit) & 0x01) << 2) |
-                                 (((plane3 >> bit) & 0x01) << 3);
-
-                    if (colorIndex != 0)
-                    {
-                        var decoded = DecodeColor(palette, colorIndex);
-                        b = decoded.b;
-                        g = decoded.g;
-                        r = decoded.r;
-                    }
+                    var decoded = DecodeColor(palette, colorIndex);
+                    b = decoded.b;
+                    g = decoded.g;
+                    r = decoded.r;
                 }
-
-                var pixelOffset = (y * FrameWidth + x) * 4;
-                m_frameBuffer[pixelOffset] = b;
-                m_frameBuffer[pixelOffset + 1] = g;
-                m_frameBuffer[pixelOffset + 2] = r;
-                m_frameBuffer[pixelOffset + 3] = 255;
-
-                // Item (1): Record BG priority only when BG pixel is visible (color != 0).
-                m_bgPriority[(y * FrameWidth) + x] = (byte)(bgPriority && colorIndex != 0 ? 1 : 0);
             }
-        }
 
-        if (AreSpritesVisible)
-            RenderSprites();
+            var pixelOffset = (y * FrameWidth + x) * 4;
+            m_frameBuffer[pixelOffset] = b;
+            m_frameBuffer[pixelOffset + 1] = g;
+            m_frameBuffer[pixelOffset + 2] = r;
+            m_frameBuffer[pixelOffset + 3] = 255;
+
+            m_bgPriority[(y * FrameWidth) + x] = (byte)(bgPriority && colorIndex != 0 ? 1 : 0);
+        }
     }
 
     private (byte b, byte g, byte r) DecodeColor(int palette, int colorIndex)
