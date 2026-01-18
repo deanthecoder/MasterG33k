@@ -48,7 +48,14 @@ public sealed class ZexallSmsTests : TestsBase
         cpu.Reset();
         vdp.Reset();
 
+        // Create abort file on desktop
+        var desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        var abortFilePath = Path.Combine(desktopPath, "ZEXDOC_DELETE_TO_ABORT.txt");
+        File.WriteAllText(abortFilePath, "Delete this file to abort the ZEXDOC test.");
+
         const long maxTStates = (long)(SmsCpuHz * EmulatedSeconds);
+        const long checkIntervalTStates = (long)(SmsCpuHz * 20); // Check every 20 emulated seconds
+        var nextCheckTStates = checkIntervalTStates;
         var lastTStates = cpu.TStatesSinceCpuStart;
         var stopwatch = Stopwatch.StartNew();
         try
@@ -63,6 +70,17 @@ public sealed class ZexallSmsTests : TestsBase
                 lastTStates = current;
                 if (vdp.TryConsumeInterrupt())
                     cpu.RequestInterrupt();
+
+                // Check if abort file still exists every 20 emulated seconds
+                if (current >= nextCheckTStates)
+                {
+                    if (!File.Exists(abortFilePath))
+                    {
+                        Console.WriteLine("Abort file deleted - stopping test.");
+                        break;
+                    }
+                    nextCheckTStates += checkIntervalTStates;
+                }
             }
         }
         finally
