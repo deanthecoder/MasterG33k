@@ -52,13 +52,10 @@ public sealed class SmsVdp
     private readonly int[] m_spritesOnLine = new int[FrameHeight];
 
     private ushort m_address;
+    private byte m_readBuffer;
     private byte m_controlLatchLow;
     private bool m_isControlLatchFull;
     private AccessMode m_accessMode = AccessMode.VramRead;
-    private int m_vramWrites;
-    private int m_cramWrites;
-    private int m_registerWrites;
-    private int m_controlWrites;
 
     private int m_cycleAccumulator;
     private int m_vCounter;
@@ -87,13 +84,10 @@ public sealed class SmsVdp
         Array.Clear(m_bgPriority, 0, m_bgPriority.Length);
         Array.Clear(m_spritesOnLine, 0, m_spritesOnLine.Length);
         m_address = 0;
+        m_readBuffer = 0;
         m_controlLatchLow = 0;
         m_isControlLatchFull = false;
         m_accessMode = AccessMode.VramRead;
-        m_vramWrites = 0;
-        m_cramWrites = 0;
-        m_registerWrites = 0;
-        m_controlWrites = 0;
         m_cycleAccumulator = 0;
         m_vCounter = 0;
         m_lineCounter = m_registers[10];
@@ -111,25 +105,37 @@ public sealed class SmsVdp
         }
     }
 
-    public byte ReadData() => m_accessMode == AccessMode.VramRead
-        ? ReadVram()
-        : (byte)0;
+    public byte ReadData()
+    {
+        // Any access via the data port resets the 2-byte control word latch.
+        m_isControlLatchFull = false;
+
+        if (m_accessMode != AccessMode.VramRead)
+            return 0;
+
+        // VRAM reads are buffered: return the current read buffer, then fetch the next byte.
+        var value = m_readBuffer;
+        m_readBuffer = m_vram[m_address & 0x3FFF];
+        m_address = (ushort)((m_address + 1) & 0x3FFF);
+        return value;
+    }
 
     public void WriteData(byte value)
     {
+        m_isControlLatchFull = false;
         switch (m_accessMode)
         {
             case AccessMode.VramWrite:
                 m_vram[m_address & 0x3FFF] = value;
                 m_address = (ushort)((m_address + 1) & 0x3FFF);
-                m_vramWrites++;
                 break;
             case AccessMode.CramWrite:
                 m_cram[m_address & 0x1F] = value;
                 m_address = (ushort)((m_address + 1) & 0x1F);
-                m_cramWrites++;
                 break;
         }
+        // Writes update the read buffer on real hardware.
+        m_readBuffer = value;
     }
 
     public byte ReadStatus()
@@ -159,19 +165,20 @@ public sealed class SmsVdp
         {
             m_controlLatchLow = value;
             m_isControlLatchFull = true;
+
+            // The low byte is latched immediately into the address register (upper bits preserved).
+            m_address = (ushort)((m_address & 0x3F00) | value);
             return;
         }
 
         var high = value;
         var command = (byte)(high >> 6);
-        m_controlWrites++;
         if (command == 0b10)
         {
             var regIndex = high & 0x0F;
             if (regIndex < m_registers.Length)
             {
                 m_registers[regIndex] = m_controlLatchLow;
-                m_registerWrites++;
                 if (regIndex == 10)
                     m_lineCounter = m_controlLatchLow;
             }
@@ -186,52 +193,16 @@ public sealed class SmsVdp
                 0b11 => AccessMode.CramWrite,
                 _ => m_accessMode
             };
+
+            // Entering VRAM read mode preloads the read buffer and increments the address.
+            if (m_accessMode == AccessMode.VramRead)
+            {
+                m_readBuffer = m_vram[m_address & 0x3FFF];
+                m_address = (ushort)((m_address + 1) & 0x3FFF);
+            }
         }
 
         m_isControlLatchFull = false;
-    }
-
-    public string GetDebugSummary()
-    {
-        var nonZeroVram = 0;
-        for (var i = 0; i < m_vram.Length; i++)
-            if (m_vram[i] != 0)
-                nonZeroVram++;
-
-        var nonZeroCram = 0;
-        for (var i = 0; i < m_cram.Length; i++)
-            if (m_cram[i] != 0)
-                nonZeroCram++;
-
-        var nameTableBaseFromRegs = ((m_registers[2] & 0x0E) << 10) & 0x3FFF;
-        var patternBaseFromRegs = ((m_registers[4] & 0x04) << 11) & 0x3FFF;
-
-        var nameTableBase = SelectNameTableBase();
-        var primaryPatternBase = patternBaseFromRegs;
-        var alternatePatternBase = primaryPatternBase ^ 0x2000;
-        var (primaryHits, alternateHits, maxTile) = CountPatternHits(nameTableBase, primaryPatternBase, alternatePatternBase);
-        var nameEntries = 0;
-        var nonZeroEntries = 0;
-        Span<byte> nameSample = stackalloc byte[16];
-        for (var i = 0; i < 16; i++)
-            nameSample[i] = m_vram[(nameTableBase + i) & 0x3FFF];
-
-        for (var i = 0; i < 32 * 28; i++)
-        {
-            var addr = (nameTableBase + i * 2) & 0x3FFF;
-            var low = m_vram[addr];
-            var high = m_vram[(addr + 1) & 0x3FFF];
-            if (low != 0 || high != 0)
-                nonZeroEntries++;
-            nameEntries++;
-        }
-
-        return $"VDP writes: VRAM={m_vramWrites}, CRAM={m_cramWrites}, REG={m_registerWrites}, CTRL={m_controlWrites} | " +
-               $"VRAM non-zero={nonZeroVram}, CRAM non-zero={nonZeroCram}, Name entries={nonZeroEntries}/{nameEntries} | " +
-               $"R1={m_registers[1]:X2} R2={m_registers[2]:X2} R4={m_registers[4]:X2} R5={m_registers[5]:X2} " +
-               $"R8={m_registers[8]:X2} R9={m_registers[9]:X2} Addr={m_address:X4} Mode={m_accessMode} | " +
-               $"NameBase(reg)=0x{nameTableBaseFromRegs:X4} NameBase(sel)=0x{nameTableBase:X4} Sample={Convert.ToHexString(nameSample)} | " +
-               $"PatternBase(reg)=0x{patternBaseFromRegs:X4} PatternBase(sel)=0x{primaryPatternBase:X4}/0x{alternatePatternBase:X4} Hits={primaryHits}/{alternateHits} MaxTile={maxTile}";
     }
 
     private void AdvanceScanline()
@@ -276,26 +247,13 @@ public sealed class SmsVdp
         return true;
     }
 
-    private byte ReadVram()
-    {
-        var value = m_vram[m_address & 0x3FFF];
-        m_address = (ushort)((m_address + 1) & 0x3FFF);
-        return value;
-    }
-
     private void RenderFrame()
     {
         // Use the VDP registers directly. Heuristics are useful for bring-up, but can break when games switch tables mid-frame or between screens.
         var nameTableBase = ((m_registers[2] & 0x0E) << 10) & 0x3FFF;
-        var patternBase = ((m_registers[4] & 0x04) << 11) & 0x3FFF;
 
-        // Bring-up fallback: some BIOS/games use the alternate pattern region. Prefer whichever region actually contains the referenced tiles.
-        var alternatePatternBase = patternBase ^ 0x2000;
-        var (primaryHits, alternateHits, _) = CountPatternHits(nameTableBase, patternBase, alternatePatternBase);
-        if (alternateHits > primaryHits)
-        {
-            patternBase = alternatePatternBase;
-        }
+        // Mode 4: Background tile pattern addresses are derived directly from the tile index.
+        // (i.e. tile N starts at VRAM offset N*32.)
 
         var scrollX = m_registers[8];
         var scrollY = m_registers[9];
@@ -332,7 +290,7 @@ public sealed class SmsVdp
                     var palette = high.IsBitSet(AttrBitPalette) ? 1 : 0;
                     bgPriority = high.IsBitSet(AttrBitPriority); // BG priority over sprites
 
-                    var tileBase = (patternBase + tileIndex * 32) & 0x3FFF;
+                    var tileBase = (tileIndex * 32) & 0x3FFF;
                     var sourceRow = vFlip ? 7 - rowInTile : rowInTile;
                     var rowAddr = (tileBase + sourceRow * 4) & 0x3FFF;
                     var plane0 = m_vram[rowAddr];
@@ -473,83 +431,6 @@ public sealed class SmsVdp
 
         return converted;
     }
-
-    private int SelectNameTableBase()
-    {
-        Span<int> bases = stackalloc int[4];
-        bases[0] = (m_registers[2] & 0x0E) << 10;
-        bases[1] = (m_registers[2] & 0x0F) << 10;
-        bases[2] = 0x3800;
-        bases[3] = 0x3C00;
-
-        var bestBase = bases[0];
-        var bestCount = -1;
-        for (var i = 0; i < bases.Length; i++)
-        {
-            var candidate = bases[i] & 0x3FFF;
-            var count = CountNonZeroNameEntries(candidate);
-            if (count > bestCount)
-            {
-                bestCount = count;
-                bestBase = candidate;
-            }
-        }
-
-        return bestBase;
-    }
-
-    private int CountNonZeroNameEntries(int baseAddr)
-    {
-        var count = 0;
-        for (var i = 0; i < 32 * 28; i++)
-        {
-            var addr = (baseAddr + i * 2) & 0x3FFF;
-            if (m_vram[addr] != 0 || m_vram[(addr + 1) & 0x3FFF] != 0)
-                count++;
-        }
-
-        return count;
-    }
-
-    private bool HasTileData(int baseAddr, int tileIndex)
-    {
-        var start = (baseAddr + tileIndex * 32) & 0x3FFF;
-        for (var i = 0; i < 32; i++)
-        {
-            if (m_vram[(start + i) & 0x3FFF] != 0)
-                return true;
-        }
-
-        return false;
-    }
-
-    private (int primaryHits, int alternateHits, int maxTile) CountPatternHits(int nameTableBase, int primaryBase, int alternateBase)
-    {
-        var primaryHits = 0;
-        var alternateHits = 0;
-        var maxTile = 0;
-
-        for (var i = 0; i < 32 * 28; i++)
-        {
-            var addr = (nameTableBase + i * 2) & 0x3FFF;
-            var low = m_vram[addr];
-            var high = m_vram[(addr + 1) & 0x3FFF];
-            if (low == 0 && high == 0)
-                continue;
-
-            var tileIndex = low | (((high >> AttrBitTileIndexMsb) & 0x01) << 8);
-            if (tileIndex > maxTile)
-                maxTile = tileIndex;
-
-            if (HasTileData(primaryBase, tileIndex))
-                primaryHits++;
-            if (HasTileData(alternateBase, tileIndex))
-                alternateHits++;
-        }
-
-        return (primaryHits, alternateHits, maxTile);
-    }
-
 
     private void RenderSprites()
     {

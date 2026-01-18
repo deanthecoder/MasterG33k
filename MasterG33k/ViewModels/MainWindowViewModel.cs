@@ -23,7 +23,6 @@ using CSharp.Core.Extensions;
 using CSharp.Core.UI;
 using CSharp.Core.ViewModels;
 using DTC.Z80;
-using DTC.Z80.Debuggers;
 using DTC.Z80.Devices;
 
 namespace MasterG33k.ViewModels;
@@ -40,7 +39,6 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly SmsVdp m_vdp;
     private readonly SmsJoypad m_joypad;
     private readonly SmsMemoryController m_memoryController;
-    private readonly CpuLoopDebugger m_loopDebugger;
     private readonly Lock m_cpuStepLock = new();
     private Thread m_cpuThread;
     private bool m_shutdownRequested;
@@ -114,8 +112,6 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 #if DEBUG
             m_cpu.InstructionLogger.IsEnabled = value;
 #endif
-            if (m_loopDebugger != null)
-                m_loopDebugger.IsEnabled = value;
         }
     }
 
@@ -139,12 +135,6 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         m_cpu = new Cpu(new Bus(new Memory(), portDevice));
         m_cpu.Bus.Attach(new SmsRamMirrorDevice(m_cpu.MainMemory));
         m_cpu.Bus.Attach(m_memoryController);
-        m_loopDebugger = new CpuLoopDebugger(() =>
-        {
-            var vectorByte = m_cpu.Bus.Read8(0x0038);
-            return $"{m_vdp.GetDebugSummary()} | MemCtrl={m_memoryController.GetDebugSummary()} Vec38Map={vectorByte:X2}";
-        });
-        m_cpu.AddDebugger(m_loopDebugger);
         m_clockSync = new ClockSync(GetEffectiveCpuHz, () => m_cpu.TStatesSinceCpuStart, () => m_cpu.Reset());
         Settings.PropertyChanged += OnSettingsPropertyChanged;
         IsCpuHistoryTracked = Settings.IsCpuHistoryTracked;
@@ -301,7 +291,6 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             m_cpu.Reset();
             m_vdp.Reset();
             m_memoryController.Reset();
-            m_loopDebugger?.Reset();
             m_clockSync.Reset();
             m_lastCpuTStates = 0;
         }
@@ -384,7 +373,6 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             m_cpu.Reset();
             m_vdp.Reset();
             m_memoryController.Reset();
-            m_loopDebugger?.Reset();
             m_clockSync.Reset();
             m_lastCpuTStates = 0;
         }
