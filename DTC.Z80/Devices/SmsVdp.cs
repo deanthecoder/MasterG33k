@@ -292,11 +292,26 @@ public sealed class SmsVdp
         if (m_registers[0].IsBitSet(6) && y < 16)
             scrollX = 0;
 
+        // (3) Left column blanking (8 pixels) when enabled.
+        var isLeftColumnBlanked = m_registers[0].IsBitSet(5);
+
         for (var x = 0; x < FrameWidth; x++)
         {
             var (b, g, r) = DecodeBackdropColor();
             var bgPriority = false;
             var colorIndex = 0;
+
+            if (isLeftColumnBlanked && x < 8)
+            {
+                // Force backdrop colour; BG pixel is treated as transparent for priority purposes.
+                var offset = (y * FrameWidth + x) * 4;
+                m_frameBuffer[offset] = b;
+                m_frameBuffer[offset + 1] = g;
+                m_frameBuffer[offset + 2] = r;
+                m_frameBuffer[offset + 3] = 255;
+                m_bgPriority[(y * FrameWidth) + x] = 0;
+                continue;
+            }
 
             if (IsBackgroundVisible)
             {
@@ -559,6 +574,9 @@ public sealed class SmsVdp
                 var (b, g, r) = DecodeColor(1, colorIndex);
                 var destX = x + col * scale;
                 if (destX < 0 || destX >= FrameWidth)
+                    continue;
+                // Reg 0 bit 5: left column blanking hides sprites in the leftmost 8 pixels.
+                if (m_registers[0].IsBitSet(5) && destX < 8)
                     continue;
 
                 var maxX = Math.Min(FrameWidth, destX + scale);
