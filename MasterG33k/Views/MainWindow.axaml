@@ -142,6 +142,8 @@
                         <Separator />
                         <MenuItem Header="Report CPU Clock Ticks" Command="{Binding ReportCpuClockTicks}" />
                         <MenuItem Header="Report Frame Checksum + Ticks" Command="{Binding ReportFrameChecksum}" />
+                        <Separator />
+                        <MenuItem Header="Export Background Tile Map..." Command="{Binding ExportBackgroundTileMap}" />
                     </MenuItem>
 
                     <MenuItem Header="_Help">

@@ -7,6 +7,8 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
+
+using System.Text;
 using CSharp.Core;
 using CSharp.Core.Image;
 
@@ -485,6 +487,259 @@ public sealed class SmsVdp
         TgaWriter.Write(tgaFile, rgba, width, height, 4);
     }
 
+    public void DumpBackgroundTileMapWithTiles(FileInfo outputFile)
+    {
+        if (outputFile == null)
+            throw new ArgumentNullException(nameof(outputFile));
+        if (outputFile.Directory == null)
+            throw new InvalidOperationException("Output file must include a directory.");
+
+        outputFile.Directory.Create();
+
+        var nameTableBase = ((m_registers[2] & 0x0E) << 10) & 0x3FFF;
+        var patternBase = ((m_registers[4] & 0x04) << 11) & 0x3FFF;
+        var alternatePatternBase = patternBase ^ 0x2000;
+
+        var scrollX = m_registers[8];
+        var scrollY = m_registers[9];
+
+        const int tilesWide = 32;
+        const int tilesHigh = 24;
+        var builder = new StringBuilder();
+        var tilesToDump = new HashSet<BackgroundTileKey>();
+        var tileIndices = new HashSet<int>();
+
+        for (var row = 0; row < tilesHigh; row++)
+        {
+            var sourceY = (row * 8 + scrollY) & 0xFF;
+            var tileY = sourceY >> 3;
+            var rowBase = tileY * tilesWide;
+
+            for (var col = 0; col < tilesWide; col++)
+            {
+                var sourceX = (col * 8 + scrollX) & 0xFF;
+                var tileX = sourceX >> 3;
+
+                var entryAddr = (nameTableBase + (rowBase + tileX) * 2) & 0x3FFF;
+                var low = m_vram[entryAddr];
+                var high = m_vram[(entryAddr + 1) & 0x3FFF];
+
+                var tileIndex = low | (((high >> AttrBitTileIndexMsb) & 0x01) << 8);
+                var palette = high.IsBitSet(AttrBitPalette) ? 1 : 0;
+                var hFlip = high.IsBitSet(AttrBitHFlip);
+                var vFlip = high.IsBitSet(AttrBitVFlip);
+
+                tilesToDump.Add(new BackgroundTileKey(tileIndex, palette, hFlip, vFlip));
+                tileIndices.Add(tileIndex);
+
+                if (col > 0)
+                    builder.Append(' ');
+                builder.Append(tileIndex.ToString("X3"));
+            }
+
+            builder.AppendLine();
+        }
+
+        File.WriteAllText(outputFile.FullName, builder.ToString());
+
+        var baseName = Path.GetFileNameWithoutExtension(outputFile.Name);
+        var summaryFile = outputFile.Directory.GetFile($"{baseName}-summary.json");
+        File.WriteAllText(summaryFile.FullName, BuildBackgroundSummaryJson(nameTableBase, patternBase, alternatePatternBase, scrollX, scrollY));
+
+        var cramFile = outputFile.Directory.GetFile($"{baseName}-cram.txt");
+        File.WriteAllText(cramFile.FullName, BuildCramDumpText());
+
+        var tileDataFile = outputFile.Directory.GetFile($"{baseName}-tiles.txt");
+        File.WriteAllText(tileDataFile.FullName, BuildBackgroundTileDataText(tileIndices, patternBase));
+
+        var debugFile = outputFile.Directory.GetFile($"{baseName}-debug.txt");
+        File.WriteAllText(debugFile.FullName, BuildBackgroundDebugText(0x044, nameTableBase, patternBase, alternatePatternBase, scrollX, scrollY));
+
+        var screenshotFile = outputFile.Directory.GetFile($"{baseName}-frame.tga");
+        DumpFrame(screenshotFile);
+
+        foreach (var tile in tilesToDump
+                     .OrderBy(key => key.TileIndex)
+                     .ThenBy(key => key.Palette)
+                     .ThenBy(key => key.HFlip)
+                     .ThenBy(key => key.VFlip))
+        {
+            var tileFile = outputFile.Directory.GetFile(
+                $"{tile.TileIndex:X3}-p{tile.Palette}-h{(tile.HFlip ? 1 : 0)}-v{(tile.VFlip ? 1 : 0)}.tga");
+            DumpBackgroundTile(tileFile, tile.TileIndex, patternBase, tile.Palette, tile.HFlip, tile.VFlip);
+
+            var altTileFile = outputFile.Directory.GetFile(
+                $"{tile.TileIndex:X3}-p{tile.Palette}-h{(tile.HFlip ? 1 : 0)}-v{(tile.VFlip ? 1 : 0)}-alt.tga");
+            DumpBackgroundTile(altTileFile, tile.TileIndex, alternatePatternBase, tile.Palette, tile.HFlip, tile.VFlip);
+        }
+    }
+
+    private string BuildBackgroundSummaryJson(int nameTableBase, int patternBase, int alternatePatternBase, int scrollX, int scrollY)
+    {
+        var registers = string.Join(", ", m_registers.Select(value => $"\"0x{value:X2}\""));
+        var builder = new StringBuilder();
+        builder.AppendLine("{");
+        builder.AppendLine($"  \"nameTableBase\": \"0x{nameTableBase:X4}\",");
+        builder.AppendLine($"  \"patternBaseReg\": \"0x{(((m_registers[4] & 0x04) << 11) & 0x3FFF):X4}\",");
+        builder.AppendLine($"  \"patternBaseSelected\": \"0x{patternBase:X4}\",");
+        builder.AppendLine($"  \"patternBaseAlternate\": \"0x{alternatePatternBase:X4}\",");
+        builder.AppendLine($"  \"scroll\": {{ \"x\": {scrollX}, \"y\": {scrollY} }},");
+        builder.AppendLine($"  \"registers\": [{registers}]");
+        builder.AppendLine("}");
+        return builder.ToString();
+    }
+
+    private string BuildCramDumpText()
+    {
+        var builder = new StringBuilder();
+        for (var i = 0; i < m_cram.Length; i += 16)
+        {
+            builder.Append($"{i:X2}:");
+            for (var j = 0; j < 16 && i + j < m_cram.Length; j++)
+            {
+                builder.Append($" {m_cram[i + j]:X2}");
+            }
+
+            builder.AppendLine();
+        }
+
+        return builder.ToString();
+    }
+
+    private string BuildBackgroundTileDataText(IEnumerable<int> tileIndices, int patternBase)
+    {
+        var builder = new StringBuilder();
+        foreach (var tileIndex in tileIndices.OrderBy(index => index))
+        {
+            builder.AppendLine($"Tile {tileIndex:X3} (0x{tileIndex:X3})");
+            var tileBase = (patternBase + tileIndex * 32) & 0x3FFF;
+            for (var row = 0; row < 8; row++)
+            {
+                var rowAddr = (tileBase + row * 4) & 0x3FFF;
+                builder.Append($"  Row {row}:");
+                for (var plane = 0; plane < 4; plane++)
+                {
+                    builder.Append($" {m_vram[(rowAddr + plane) & 0x3FFF]:X2}");
+                }
+
+                builder.AppendLine();
+            }
+
+            builder.AppendLine();
+        }
+
+        return builder.ToString();
+    }
+
+    private string BuildBackgroundDebugText(int focusTileIndex, int nameTableBase, int patternBase, int alternatePatternBase, int scrollX, int scrollY)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine($"Focus tile: {focusTileIndex:X3} (0x{focusTileIndex:X3})");
+        builder.AppendLine();
+        builder.AppendLine("Summary:");
+        builder.AppendLine(BuildBackgroundSummaryJson(nameTableBase, patternBase, alternatePatternBase, scrollX, scrollY));
+        builder.AppendLine();
+        builder.AppendLine("CRAM:");
+        builder.AppendLine(BuildCramDumpText());
+        builder.AppendLine();
+        builder.AppendLine("Name table occurrences (visible 32x24):");
+        AppendFocusTileOccurrences(builder, focusTileIndex, nameTableBase, scrollX, scrollY);
+        builder.AppendLine();
+        builder.AppendLine("Pattern data @ selected base:");
+        AppendFocusTilePatternData(builder, focusTileIndex, patternBase);
+        builder.AppendLine();
+        builder.AppendLine("Pattern data @ alternate base:");
+        AppendFocusTilePatternData(builder, focusTileIndex, alternatePatternBase);
+        return builder.ToString();
+    }
+
+    private void AppendFocusTileOccurrences(StringBuilder builder, int focusTileIndex, int nameTableBase, int scrollX, int scrollY)
+    {
+        var foundAny = false;
+        for (var row = 0; row < 24; row++)
+        {
+            var sourceY = (row * 8 + scrollY) & 0xFF;
+            var tileY = sourceY >> 3;
+            var rowBase = tileY * 32;
+            for (var col = 0; col < 32; col++)
+            {
+                var sourceX = (col * 8 + scrollX) & 0xFF;
+                var tileX = sourceX >> 3;
+                var entryAddr = (nameTableBase + (rowBase + tileX) * 2) & 0x3FFF;
+                var low = m_vram[entryAddr];
+                var high = m_vram[(entryAddr + 1) & 0x3FFF];
+                var tileIndex = low | (((high >> AttrBitTileIndexMsb) & 0x01) << 8);
+                if (tileIndex != focusTileIndex)
+                    continue;
+
+                var palette = high.IsBitSet(AttrBitPalette) ? 1 : 0;
+                var hFlip = high.IsBitSet(AttrBitHFlip);
+                var vFlip = high.IsBitSet(AttrBitVFlip);
+                var priority = high.IsBitSet(AttrBitPriority);
+                builder.AppendLine($"  ({col},{row}) addr=0x{entryAddr:X4} low=0x{low:X2} high=0x{high:X2} pal={palette} h={BoolToInt(hFlip)} v={BoolToInt(vFlip)} pri={BoolToInt(priority)}");
+                foundAny = true;
+            }
+        }
+
+        if (!foundAny)
+            builder.AppendLine("  (none)");
+    }
+
+    private void AppendFocusTilePatternData(StringBuilder builder, int focusTileIndex, int patternBase)
+    {
+        var tileBase = (patternBase + focusTileIndex * 32) & 0x3FFF;
+        builder.AppendLine($"  tileBase=0x{tileBase:X4}");
+        for (var row = 0; row < 8; row++)
+        {
+            var rowAddr = (tileBase + row * 4) & 0x3FFF;
+            builder.Append($"  Row {row}:");
+            for (var plane = 0; plane < 4; plane++)
+                builder.Append($" {m_vram[(rowAddr + plane) & 0x3FFF]:X2}");
+            builder.AppendLine();
+        }
+    }
+
+    private static int BoolToInt(bool value) => value ? 1 : 0;
+
+    private void DumpBackgroundTile(FileInfo tgaFile, int tileIndex, int patternBase, int palette, bool hFlip, bool vFlip)
+    {
+        const int tileSize = 8;
+        var buffer = new byte[tileSize * tileSize * 4];
+
+        for (var row = 0; row < tileSize; row++)
+        {
+            var sourceRow = vFlip ? 7 - row : row;
+            var tileBase = (patternBase + tileIndex * 32) & 0x3FFF;
+            var rowAddr = (tileBase + sourceRow * 4) & 0x3FFF;
+            var plane0 = m_vram[rowAddr];
+            var plane1 = m_vram[(rowAddr + 1) & 0x3FFF];
+            var plane2 = m_vram[(rowAddr + 2) & 0x3FFF];
+            var plane3 = m_vram[(rowAddr + 3) & 0x3FFF];
+
+            for (var col = 0; col < tileSize; col++)
+            {
+                var bit = hFlip ? col : 7 - col;
+                var colorIndex = ((plane0 >> bit) & 0x01) |
+                                 (((plane1 >> bit) & 0x01) << 1) |
+                                 (((plane2 >> bit) & 0x01) << 2) |
+                                 (((plane3 >> bit) & 0x01) << 3);
+
+                var (b, g, r) = colorIndex == 0
+                    ? DecodeBackdropColor()
+                    : DecodeColor(palette, colorIndex);
+
+                var offset = (row * tileSize + col) * 4;
+                buffer[offset] = b;
+                buffer[offset + 1] = g;
+                buffer[offset + 2] = r;
+                buffer[offset + 3] = 255;
+            }
+        }
+
+        var rgba = ConvertBgraToRgba(buffer);
+        TgaWriter.Write(tgaFile, rgba, tileSize, tileSize, 4);
+    }
+
     private static byte[] ConvertBgraToRgba(byte[] buffer)
     {
         var converted = new byte[buffer.Length];
@@ -498,6 +753,8 @@ public sealed class SmsVdp
 
         return converted;
     }
+
+    private readonly record struct BackgroundTileKey(int TileIndex, int Palette, bool HFlip, bool VFlip);
 
     private void RenderSprites()
     {
