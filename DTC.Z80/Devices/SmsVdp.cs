@@ -34,6 +34,8 @@ public sealed class SmsVdp
     private const int TotalScanlines = 262;
     private const int VblankStartLine = 192;
     private const byte StatusVblankBit = 0x80;
+    private const byte StatusSpriteOverflowBit = 0x40;
+    private const byte StatusSpriteCollisionBit = 0x20;
 
     // Background tile attribute bit positions in Mode 4
     private const int AttrBitTileIndexMsb = 0;   // Name table high byte bit 0 -> tile index bit 8
@@ -53,6 +55,7 @@ public sealed class SmsVdp
 
     // Tracks how many sprites are present on each scanline (for 8 sprites/line rule).
     private readonly int[] m_spritesOnLine = new int[FrameHeight];
+    private readonly byte[] m_spriteCollision = new byte[FrameWidth * FrameHeight];
 
     private ushort m_address;
     private byte m_readBuffer;
@@ -66,6 +69,10 @@ public sealed class SmsVdp
     private byte m_status;
     private bool m_interruptPending;
     private bool m_wasMode4;
+    private int m_lastDisplayHeight;
+    private bool m_warnedNonMode4;
+    private bool m_warnedMode2;
+    private bool m_warnedMode4WithoutMode2;
 
     public event EventHandler<byte[]> FrameRendered;
 
@@ -87,6 +94,7 @@ public sealed class SmsVdp
         Array.Clear(m_frameBuffer, 0, m_frameBuffer.Length);
         Array.Clear(m_bgPriority, 0, m_bgPriority.Length);
         Array.Clear(m_spritesOnLine, 0, m_spritesOnLine.Length);
+        Array.Clear(m_spriteCollision, 0, m_spriteCollision.Length);
         m_address = 0;
         m_readBuffer = 0;
         m_controlLatchLow = 0;
@@ -98,6 +106,10 @@ public sealed class SmsVdp
         m_status = 0;
         m_interruptPending = false;
         m_wasMode4 = true;
+        m_lastDisplayHeight = FrameHeight;
+        m_warnedNonMode4 = false;
+        m_warnedMode2 = false;
+        m_warnedMode4WithoutMode2 = false;
     }
 
     public void AdvanceCycles(long tStates)
@@ -146,7 +158,7 @@ public sealed class SmsVdp
     public byte ReadStatus()
     {
         var status = m_status;
-        m_status &= unchecked((byte)~StatusVblankBit);
+        m_status &= 0x1F; // Clear VBlank + sprite flags on read.
         m_isControlLatchFull = false;
         m_interruptPending = false;
         return status;
@@ -216,6 +228,9 @@ public sealed class SmsVdp
         // Mode 4 is enabled by setting Reg 0 bit 2 (M4). Sega docs also recommend keeping Reg 0 bit 1 set in Mode 4.
         var isMode4 = m_registers[0].IsBitSet(2);
 
+        WarnIfUnsupportedHeight();
+        WarnIfUnsupportedModeAssumptions();
+
         if (isMode4 == m_wasMode4)
             return;
 
@@ -223,6 +238,69 @@ public sealed class SmsVdp
 
         var modeText = isMode4 ? "Mode 4" : "Non-Mode4";
         Logger.Instance.Warn($"[VDP] Mode changed to {modeText}. R0=0x{m_registers[0]:X2} R1=0x{m_registers[1]:X2} line={m_vCounter}.");
+    }
+
+    private void WarnIfUnsupportedModeAssumptions()
+    {
+        var mode2 = m_registers[0].IsBitSet(1);
+        var mode4 = m_registers[0].IsBitSet(2);
+
+        if (!mode4)
+        {
+            if (!m_warnedNonMode4)
+            {
+                Logger.Instance.Warn($"[VDP] Non-Mode4 selected but renderer assumes Mode 4. R0=0x{m_registers[0]:X2} R1=0x{m_registers[1]:X2} line={m_vCounter}.");
+                m_warnedNonMode4 = true;
+            }
+        }
+        else
+        {
+            m_warnedNonMode4 = false;
+        }
+
+        if (mode2 && !mode4)
+        {
+            if (!m_warnedMode2)
+            {
+                Logger.Instance.Warn($"[VDP] Mode 2 selected but renderer assumes Mode 4. R0=0x{m_registers[0]:X2} R1=0x{m_registers[1]:X2} line={m_vCounter}.");
+                m_warnedMode2 = true;
+            }
+        }
+        else
+        {
+            m_warnedMode2 = false;
+        }
+
+        if (mode4 && !mode2)
+        {
+            if (!m_warnedMode4WithoutMode2)
+            {
+                Logger.Instance.Warn($"[VDP] Mode 4 bit set without Mode 2 bit; renderer assumes Mode 4 configuration. R0=0x{m_registers[0]:X2} R1=0x{m_registers[1]:X2} line={m_vCounter}.");
+                m_warnedMode4WithoutMode2 = true;
+            }
+        }
+        else
+        {
+            m_warnedMode4WithoutMode2 = false;
+        }
+    }
+
+    private void WarnIfUnsupportedHeight()
+    {
+        var mode2Enabled = m_registers[0].IsBitSet(1);
+        var isMedium = mode2Enabled && m_registers[1].IsBitSet(4);
+        var isLarge = mode2Enabled && m_registers[1].IsBitSet(3);
+        var height = isLarge ? 240 : isMedium ? 224 : FrameHeight;
+
+        if (height == m_lastDisplayHeight)
+            return;
+
+        m_lastDisplayHeight = height;
+
+        if (height != FrameHeight)
+        {
+            Logger.Instance.Warn($"[VDP] Unsupported display height selected ({height} lines). R0=0x{m_registers[0]:X2} R1=0x{m_registers[1]:X2} line={m_vCounter}.");
+        }
     }
 
     private void AdvanceScanline()
@@ -291,6 +369,7 @@ public sealed class SmsVdp
         Array.Clear(m_frameBuffer, 0, m_frameBuffer.Length);
         Array.Clear(m_bgPriority, 0, m_bgPriority.Length);
         Array.Clear(m_spritesOnLine, 0, m_spritesOnLine.Length);
+        Array.Clear(m_spriteCollision, 0, m_spriteCollision.Length);
     }
 
     private void RenderBackgroundScanline(int y)
@@ -834,7 +913,7 @@ public sealed class SmsVdp
                 var canDraw = m_spritesOnLine[py] < 8;
                 if (!canDraw)
                 {
-                    m_status |= 0x20; // sprite overflow
+                    m_status |= StatusSpriteOverflowBit;
                 }
                 else
                 {
@@ -878,6 +957,12 @@ public sealed class SmsVdp
                         // This ensures scaled sprite blocks respect BG priority at every covered pixel.
                         if (m_bgPriority[(py * FrameWidth) + px] != 0)
                             continue;
+
+                        var collisionIndex = py * FrameWidth + px;
+                        if (m_spriteCollision[collisionIndex] != 0)
+                            m_status |= StatusSpriteCollisionBit;
+                        else
+                            m_spriteCollision[collisionIndex] = 1;
 
                         var offset = rowOffset + (px - destX) * 4;
                         m_frameBuffer[offset] = b;
