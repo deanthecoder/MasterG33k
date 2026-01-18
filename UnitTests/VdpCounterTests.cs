@@ -25,6 +25,10 @@ public sealed class VdpCounterTests
 
         vdp.AdvanceCycles(114);
 
+        Assert.That(vdp.ReadHCounter(), Is.Zero);
+
+        vdp.LatchHCounter();
+
         Assert.That(vdp.ReadHCounter(), Is.EqualTo(128));
     }
 

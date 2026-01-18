@@ -62,6 +62,7 @@ public sealed class SmsVdp
     private byte m_controlLatchLow;
     private bool m_isControlLatchFull;
     private AccessMode m_accessMode = AccessMode.VramRead;
+    private byte m_hCounterLatched;
 
     private int m_cycleAccumulator;
     private int m_vCounter;
@@ -100,6 +101,7 @@ public sealed class SmsVdp
         m_controlLatchLow = 0;
         m_isControlLatchFull = false;
         m_accessMode = AccessMode.VramRead;
+        m_hCounterLatched = 0;
         m_cycleAccumulator = 0;
         m_vCounter = 0;
         m_lineCounter = m_registers[10];
@@ -127,9 +129,6 @@ public sealed class SmsVdp
         // Any access via the data port resets the 2-byte control word latch.
         m_isControlLatchFull = false;
 
-        if (m_accessMode != AccessMode.VramRead)
-            return 0;
-
         // VRAM reads are buffered: return the current read buffer, then fetch the next byte.
         var value = m_readBuffer;
         m_readBuffer = m_vram[m_address & 0x3FFF];
@@ -142,13 +141,14 @@ public sealed class SmsVdp
         m_isControlLatchFull = false;
         switch (m_accessMode)
         {
+            case AccessMode.VramRead:
             case AccessMode.VramWrite:
                 m_vram[m_address & 0x3FFF] = value;
                 m_address = (ushort)((m_address + 1) & 0x3FFF);
                 break;
             case AccessMode.CramWrite:
                 m_cram[m_address & 0x1F] = value;
-                m_address = (ushort)((m_address + 1) & 0x1F);
+                m_address = (ushort)((m_address + 1) & 0x3FFF);
                 break;
         }
         // Writes update the read buffer on real hardware.
@@ -164,16 +164,27 @@ public sealed class SmsVdp
         return status;
     }
 
-    public byte ReadVCounter() => (byte)m_vCounter;
+    public byte ReadVCounter()
+    {
+        if (m_vCounter <= 218)
+            return (byte)m_vCounter;
+
+        return (byte)(m_vCounter - 219 + 0xD5);
+    }
 
     public byte ReadHCounter()
+    {
+        return m_hCounterLatched;
+    }
+
+    public void LatchHCounter()
     {
         var position = (m_cycleAccumulator * 256) / CyclesPerScanline;
         if (position < 0)
             position = 0;
         if (position > 255)
             position = 255;
-        return (byte)position;
+        m_hCounterLatched = (byte)position;
     }
 
     public void WriteControl(byte value)
@@ -200,6 +211,9 @@ public sealed class SmsVdp
                     m_lineCounter = m_controlLatchLow;
                 MonitorVdpMode();
             }
+
+            m_address = (ushort)((m_controlLatchLow | ((high & 0x3F) << 8)) & 0x3FFF);
+            m_accessMode = AccessMode.VramWrite;
         }
         else
         {
@@ -953,16 +967,16 @@ public sealed class SmsVdp
                     var rowOffset = (py * FrameWidth + destX) * 4;
                     for (var px = destX; px < maxX; px++)
                     {
-                        // Item (5): Apply BG priority masking per pixel (px,py), including when sprites are zoomed.
-                        // This ensures scaled sprite blocks respect BG priority at every covered pixel.
-                        if (m_bgPriority[(py * FrameWidth) + px] != 0)
-                            continue;
-
                         var collisionIndex = py * FrameWidth + px;
                         if (m_spriteCollision[collisionIndex] != 0)
                             m_status |= StatusSpriteCollisionBit;
                         else
                             m_spriteCollision[collisionIndex] = 1;
+
+                        // Apply BG priority masking per pixel (px,py), including when sprites are zoomed.
+                        // This ensures scaled sprite blocks respect BG priority at every covered pixel.
+                        if (m_bgPriority[(py * FrameWidth) + px] != 0)
+                            continue;
 
                         var offset = rowOffset + (px - destX) * 4;
                         m_frameBuffer[offset] = b;

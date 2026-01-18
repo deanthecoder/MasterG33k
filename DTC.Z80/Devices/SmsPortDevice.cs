@@ -23,6 +23,7 @@ public sealed class SmsPortDevice : IPortDevice
     private readonly SmsJoypad m_joypad;
     private readonly SmsMemoryController m_memoryController;
     private readonly IPortDevice m_fallback;
+    private byte m_ioControl;
 
     public SmsPortDevice(SmsVdp vdp, SmsJoypad joypad = null, SmsMemoryController memoryController = null, IPortDevice fallback = null)
     {
@@ -39,6 +40,8 @@ public sealed class SmsPortDevice : IPortDevice
         {
             case 0x3E:
                 return m_memoryController?.Control ?? 0xFF;
+            case 0x3F:
+                return m_ioControl;
             case 0xBE:
             case 0xBC:
                 return m_vdp.ReadData();
@@ -68,6 +71,9 @@ public sealed class SmsPortDevice : IPortDevice
             case 0x3E:
                 m_memoryController?.WriteControl(value);
                 return;
+            case 0x3F:
+                HandleIoControlWrite(value);
+                return;
             case 0xBE:
                 m_vdp.WriteData(value);
                 return;
@@ -89,6 +95,17 @@ public sealed class SmsPortDevice : IPortDevice
                 m_fallback.Write8(portAddress, value);
                 return;
         }
+    }
+
+    private void HandleIoControlWrite(byte value)
+    {
+        var previous = m_ioControl;
+        m_ioControl = value;
+
+        var risingTh0 = (previous & 0x01) == 0 && (value & 0x01) != 0;
+        var risingTh1 = (previous & 0x02) == 0 && (value & 0x02) != 0;
+        if (risingTh0 || risingTh1)
+            m_vdp.LatchHCounter();
     }
 
     private byte ReadJoypadPortA()
