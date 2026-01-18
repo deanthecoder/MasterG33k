@@ -284,7 +284,7 @@ public sealed class SmsVdp
         // Scroll registers.
         // Note: In Mode 4, Reg 0 contains scroll masking controls.
         //  - Bit 6: Disable horizontal scrolling for the top 2 tile rows (16 pixels).
-        //  - Bit 7: Disable vertical scrolling for the left 8 pixels.
+        //  - Bit 7: Disable vertical scrolling for the rightmost 8 tile columns (64 pixels).
         var scrollX = m_registers[8];
         var scrollY = m_registers[9];
 
@@ -300,17 +300,22 @@ public sealed class SmsVdp
 
             if (IsBackgroundVisible)
             {
-                // (2) Vertical scroll lock for left 8 pixels when enabled.
-                var effectiveScrollY = (m_registers[0].IsBitSet(7) && x < 8) ? (byte)0 : scrollY;
+                // (2) Vertical scroll lock for rightmost 8 tile columns when enabled.
+                // Reference behaviour: columns 24-31 are not affected by vertical scroll.
+                var effectiveScrollY = (m_registers[0].IsBitSet(7) && x >= 192) ? (byte)0 : scrollY;
 
                 var sourceX = (x - scrollX) & 0xFF;
-                var sourceY2 = (y + effectiveScrollY) & 0xFF;
+
+                // Vertical scroll wraps at 224 pixels (28 tile rows) in 256x192 mode.
+                var sourceY2 = y + effectiveScrollY;
+                if (sourceY2 >= 224)
+                    sourceY2 -= 224;
+
                 var tileX = sourceX >> 3;
-                var tileY2 = sourceY2 >> 3;
+                var tileY2 = sourceY2 >> 3; // 0-27
                 var colInTile = sourceX & 7;
                 var rowInTile2 = sourceY2 & 7;
 
-                // Override the row calculations for the left 8 pixels when vertical scroll is locked.
                 var rowBase = tileY2 * 32;
 
                 var entryAddr = (nameTableBase + (rowBase + tileX) * 2) & 0x3FFF;
