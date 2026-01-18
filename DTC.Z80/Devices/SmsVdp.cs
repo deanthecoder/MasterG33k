@@ -281,13 +281,16 @@ public sealed class SmsVdp
         // Mode 4: Background tile pattern addresses are derived directly from the tile index.
         // (i.e. tile N starts at VRAM offset N*32.)
 
+        // Scroll registers.
+        // Note: In Mode 4, Reg 0 contains scroll masking controls.
+        //  - Bit 6: Disable horizontal scrolling for the top 2 tile rows (16 pixels).
+        //  - Bit 7: Disable vertical scrolling for the left 8 pixels.
         var scrollX = m_registers[8];
         var scrollY = m_registers[9];
 
-        var sourceY = (y + scrollY) & 0xFF;
-        var tileY = sourceY >> 3;
-        var rowInTile = sourceY & 7;
-        var rowBase = tileY * 32;
+        // (1) Horizontal scroll lock for top 2 rows when enabled.
+        if (m_registers[0].IsBitSet(6) && y < 16)
+            scrollX = 0;
 
         for (var x = 0; x < FrameWidth; x++)
         {
@@ -297,9 +300,18 @@ public sealed class SmsVdp
 
             if (IsBackgroundVisible)
             {
-                var sourceX = (x + scrollX) & 0xFF;
+                // (2) Vertical scroll lock for left 8 pixels when enabled.
+                var effectiveScrollY = (m_registers[0].IsBitSet(7) && x < 8) ? (byte)0 : scrollY;
+
+                var sourceX = (x - scrollX) & 0xFF;
+                var sourceY2 = (y + effectiveScrollY) & 0xFF;
                 var tileX = sourceX >> 3;
+                var tileY2 = sourceY2 >> 3;
                 var colInTile = sourceX & 7;
+                var rowInTile2 = sourceY2 & 7;
+
+                // Override the row calculations for the left 8 pixels when vertical scroll is locked.
+                var rowBase = tileY2 * 32;
 
                 var entryAddr = (nameTableBase + (rowBase + tileX) * 2) & 0x3FFF;
                 var low = m_vram[entryAddr];
@@ -312,7 +324,7 @@ public sealed class SmsVdp
                 bgPriority = high.IsBitSet(AttrBitPriority);
 
                 var tileBase = (tileIndex * 32) & 0x3FFF;
-                var sourceRow = vFlip ? 7 - rowInTile : rowInTile;
+                var sourceRow = vFlip ? 7 - rowInTile2 : rowInTile2;
                 var rowAddr = (tileBase + sourceRow * 4) & 0x3FFF;
                 var plane0 = m_vram[rowAddr];
                 var plane1 = m_vram[(rowAddr + 1) & 0x3FFF];
