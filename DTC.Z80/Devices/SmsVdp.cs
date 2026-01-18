@@ -797,10 +797,11 @@ public sealed class SmsVdp
 
     private void DrawSprite(int x, int y, int tileIndex, int height, int patternBase, bool zoom)
     {
-        if (x >= FrameWidth || y >= FrameHeight)
+        var scale = zoom ? 2 : 1;
+        var spritePixelHeight = height * scale;
+        if (x >= FrameWidth || y >= FrameHeight || y + spritePixelHeight <= 0)
             return;
 
-        var scale = zoom ? 2 : 1;
         Span<int> lineYs = stackalloc int[2];
         Span<bool> lineDraw = stackalloc bool[2];
         for (var row = 0; row < height; row++)
@@ -818,9 +819,17 @@ public sealed class SmsVdp
             if (destY >= FrameHeight)
                 break;
 
-            var maxY = Math.Min(FrameHeight, destY + scale);
+            var rowStart = destY;
+            var rowEnd = destY + scale;
+            if (rowEnd <= 0)
+                continue;
+
+            if (rowStart < 0)
+                rowStart = 0;
+
+            var maxY = Math.Min(FrameHeight, rowEnd);
             var lineCount = 0;
-            for (var py = destY; py < maxY; py++)
+            for (var py = rowStart; py < maxY; py++)
             {
                 var canDraw = m_spritesOnLine[py] < 8;
                 if (!canDraw)
