@@ -18,7 +18,7 @@ using DTC.Z80.Devices;
 namespace UnitTests;
 
 [TestFixture]
-public sealed class ZexallSmsTests : TestsBase
+public sealed class ZexDocTests : TestsBase
 {
     private const double SmsCpuHz = 3_579_545;
     private const int EmulatedSeconds = 30_000;

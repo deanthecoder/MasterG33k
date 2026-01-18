@@ -55,6 +55,7 @@ public sealed class SmsVdp
 
     // Tracks how many sprites are present on each scanline (for 8 sprites/line rule).
     private readonly int[] m_spritesOnLine = new int[FrameHeight];
+    private readonly ulong[] m_spriteMaskPerLine = new ulong[FrameHeight];
     private readonly byte[] m_spriteCollision = new byte[FrameWidth * FrameHeight];
 
     private ushort m_address;
@@ -384,6 +385,7 @@ public sealed class SmsVdp
         Array.Clear(m_bgPriority, 0, m_bgPriority.Length);
         Array.Clear(m_spritesOnLine, 0, m_spritesOnLine.Length);
         Array.Clear(m_spriteCollision, 0, m_spriteCollision.Length);
+        Array.Clear(m_spriteMaskPerLine, 0, m_spriteMaskPerLine.Length);
     }
 
     private void RenderBackgroundScanline(int y)
@@ -856,6 +858,8 @@ public sealed class SmsVdp
         var spriteHeight = (m_registers[1] & 0x02) != 0 ? 16 : 8;
         var zoom = m_registers[1].IsBitSet(0);
         var spriteShift = m_registers[0].IsBitSet(3) ? -8 : 0;
+        var scale = zoom ? 2 : 1;
+        var spritePixelHeight = spriteHeight * scale;
 
         // Build list until terminator (0xD0), then draw in reverse order so low indices appear on top.
         Span<int> indices = stackalloc int[64];
@@ -866,6 +870,41 @@ public sealed class SmsVdp
             if (yTerm == 0xD0)
                 break;
             indices[count++] = i;
+        }
+
+        // SAT order determines which sprites are allowed on each scanline (first 8 only).
+        Array.Clear(m_spritesOnLine, 0, m_spritesOnLine.Length);
+        Array.Clear(m_spriteMaskPerLine, 0, m_spriteMaskPerLine.Length);
+        for (var idx = 0; idx < count; idx++)
+        {
+            var i = indices[idx];
+            var y = m_vram[(spriteTableBase + i) & 0x3FFF];
+            var spriteY = y + 1;
+            if (spriteY > 240)
+                spriteY -= 256;
+
+            var start = spriteY;
+            var end = spriteY + spritePixelHeight;
+            if (end <= 0 || start >= FrameHeight)
+                continue;
+
+            if (start < 0)
+                start = 0;
+            if (end > FrameHeight)
+                end = FrameHeight;
+
+            for (var py = start; py < end; py++)
+            {
+                if (m_spritesOnLine[py] < 8)
+                {
+                    m_spritesOnLine[py]++;
+                    m_spriteMaskPerLine[py] |= 1UL << i;
+                }
+                else
+                {
+                    m_status |= StatusSpriteOverflowBit;
+                }
+            }
         }
 
         for (var idx = count - 1; idx >= 0; idx--)
@@ -884,11 +923,11 @@ public sealed class SmsVdp
             if (spriteHeight == 16)
                 tileIndex &= 0xFE;
 
-            DrawSprite(spriteX, spriteY, tileIndex, spriteHeight, spritePatternBase, zoom);
+            DrawSprite(i, spriteX, spriteY, tileIndex, spriteHeight, spritePatternBase, zoom);
         }
     }
 
-    private void DrawSprite(int x, int y, int tileIndex, int height, int patternBase, bool zoom)
+    private void DrawSprite(int spriteIndex, int x, int y, int tileIndex, int height, int patternBase, bool zoom)
     {
         var scale = zoom ? 2 : 1;
         var spritePixelHeight = height * scale;
@@ -924,15 +963,7 @@ public sealed class SmsVdp
             var lineCount = 0;
             for (var py = rowStart; py < maxY; py++)
             {
-                var canDraw = m_spritesOnLine[py] < 8;
-                if (!canDraw)
-                {
-                    m_status |= StatusSpriteOverflowBit;
-                }
-                else
-                {
-                    m_spritesOnLine[py]++;
-                }
+                var canDraw = (m_spriteMaskPerLine[py] & (1UL << spriteIndex)) != 0;
 
                 lineYs[lineCount] = py;
                 lineDraw[lineCount] = canDraw;
