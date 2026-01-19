@@ -19,8 +19,10 @@ namespace DTC.Z80.Devices;
 public sealed class SmsRomDevice : IMemDevice
 {
     private const int BankSize = 0x4000;
+    private const int SramBankSize = 0x2000;
     private readonly byte[] m_data;
     private readonly int m_bankCount;
+    private readonly byte[] m_sram = new byte[SramBankSize * 2];
     private byte m_bank0Raw;
     private byte m_bank1Raw;
     private byte m_bank2Raw;
@@ -47,6 +49,8 @@ public sealed class SmsRomDevice : IMemDevice
         SetBank0(0);
         SetBank1((byte)Math.Min(1, m_bankCount - 1));
         SetBank2((byte)(m_bankCount - 1));
+
+        Array.Fill(m_sram, (byte)0xFF);
     }
 
     public void SetControl(byte value) => m_control = value;
@@ -79,6 +83,12 @@ public sealed class SmsRomDevice : IMemDevice
 
     public byte Read8(ushort addr)
     {
+        if (IsRamEnabled && addr >= 0x8000)
+        {
+            var offset = (addr - 0x8000) % SramBankSize;
+            return m_sram[(RamBank * SramBankSize) + offset];
+        }
+
         if (addr <= 0x3FFF)
         {
             if (addr < 0x0400)
@@ -92,6 +102,11 @@ public sealed class SmsRomDevice : IMemDevice
 
     public void Write8(ushort addr, byte value)
     {
+        if (IsRamEnabled && addr >= 0x8000 && addr <= 0xBFFF)
+        {
+            var offset = (addr - 0x8000) % SramBankSize;
+            m_sram[(RamBank * SramBankSize) + offset] = value;
+        }
     }
 
     private byte ReadBanked(byte bank, int offset)
@@ -113,4 +128,8 @@ public sealed class SmsRomDevice : IMemDevice
         // Standard Sega mapper does not apply bank shifting via 0xFFFC.
         return bank;
     }
+
+    private bool IsRamEnabled => (m_control & 0x08) != 0;
+
+    private int RamBank => (m_control & 0x04) != 0 ? 1 : 0;
 }

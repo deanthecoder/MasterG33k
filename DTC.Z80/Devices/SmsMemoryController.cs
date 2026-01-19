@@ -66,20 +66,28 @@ public sealed class SmsMemoryController : IMemDevice
     {
         if (IsBiosEnabled)
         {
-            if (m_biosRom != null)
-                return m_biosRom.Read8(addr);
-            if (addr < SlotSize && m_bios?.Length > 0)
-                return m_bios[addr % m_bios.Length];
+            if (addr < SlotSize)
+            {
+                if (m_biosRom != null)
+                    return m_biosRom.Read8(addr);
+                if (m_bios?.Length > 0)
+                    return m_bios[addr % m_bios.Length];
+            }
         }
 
         if (IsCartridgeEnabled && m_cartridge != null)
             return m_cartridge.Read8(addr);
+
+        if (IsBiosEnabled && m_biosRom != null)
+            return m_biosRom.Read8(addr);
 
         return 0xFF;
     }
 
     public void Write8(ushort addr, byte value)
     {
+        if (IsCartridgeEnabled && m_cartridge != null && addr >= 0x8000 && addr <= 0xBFFF)
+            m_cartridge.Write8(addr, value);
     }
 
     public bool IsBiosEnabled => (m_port3E & 0x08) == 0;

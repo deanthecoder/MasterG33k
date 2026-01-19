@@ -30,11 +30,16 @@ public sealed class SmsMapperDevice : IMemDevice
         m_ram = ram ?? throw new ArgumentNullException(nameof(ram));
     }
 
-    public byte Read8(ushort addr) => m_ram.Read8(addr);
+    public byte Read8(ushort addr)
+    {
+        var ramAddr = (ushort)(addr - 0x2000);
+        return m_ram.Read8(ramAddr);
+    }
 
     public void Write8(ushort addr, byte value)
     {
-        m_ram.Write8(addr, value);
+        var ramAddr = (ushort)(addr - 0x2000);
+        m_ram.Write8(ramAddr, value);
         var rom = GetActiveRom();
         if (rom == null)
             return;
@@ -57,10 +62,10 @@ public sealed class SmsMapperDevice : IMemDevice
 
     private SmsRomDevice GetActiveRom()
     {
-        if (m_memoryController.IsBiosEnabled && m_memoryController.BiosRom != null)
-            return m_memoryController.BiosRom;
         if (m_memoryController.IsCartridgeEnabled)
             return m_memoryController.Cartridge;
+        if (m_memoryController.IsBiosEnabled)
+            return m_memoryController.BiosRom;
         return null;
     }
 }

@@ -126,14 +126,16 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         m_vdp.FrameRendered += OnFrameRendered;
         m_joypad = new SmsJoypad();
         m_memoryController = new SmsMemoryController();
+        var mainMemory = new Memory();
         var portDevice = new SmsPortDevice(m_vdp, m_joypad, m_memoryController);
         m_joypad.PausePressed += (_, _) =>
         {
             // Map Pause to NMI on the CPU without blocking the UI thread.
             m_pauseNmiRequested = true;
         };
-        m_cpu = new Cpu(new Bus(new Memory(), portDevice));
-        m_cpu.Bus.Attach(new SmsRamMirrorDevice(m_cpu.MainMemory));
+        m_cpu = new Cpu(new Bus(mainMemory, portDevice));
+        m_cpu.Bus.Attach(new SmsSystemRamDevice(m_cpu.MainMemory, m_memoryController));
+        m_cpu.Bus.Attach(new SmsSystemRamMirrorDevice(m_cpu.MainMemory, m_memoryController));
         m_cpu.Bus.Attach(m_memoryController);
         m_clockSync = new ClockSync(GetEffectiveCpuHz, () => m_cpu.TStatesSinceCpuStart, () => m_cpu.Reset());
         Settings.PropertyChanged += OnSettingsPropertyChanged;
@@ -206,7 +208,9 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         {
             SmsRomChecksum.TryPatchChecksum(biosData, patchBothFields: true);
             var romDevice = new SmsRomDevice(biosData);
-            m_cpu.Bus.Attach(new SmsMapperDevice(m_memoryController, m_cpu.MainMemory));
+            var mapper = new SmsMapperDevice(m_memoryController, m_cpu.MainMemory);
+            m_cpu.Bus.Attach(mapper);
+            m_cpu.Bus.Attach(new SmsMapperMirrorDevice(mapper));
             m_memoryController.SetCartridge(romDevice, forceEnabled: false);
             m_memoryController.SetBiosRom(romDevice);
             m_memoryController.Reset();
@@ -373,7 +377,9 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         StopCpu();
 
         var romDevice = new SmsRomDevice(romData);
-        m_cpu.Bus.Attach(new SmsMapperDevice(m_memoryController, m_cpu.MainMemory));
+        var mapper = new SmsMapperDevice(m_memoryController, m_cpu.MainMemory);
+        m_cpu.Bus.Attach(mapper);
+        m_cpu.Bus.Attach(new SmsMapperMirrorDevice(mapper));
         m_memoryController.SetCartridge(romDevice, forceEnabled: false);
 
         lock (m_cpuStepLock)
