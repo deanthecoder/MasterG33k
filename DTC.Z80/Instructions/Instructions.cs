@@ -9,7 +9,7 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 using System.Runtime.CompilerServices;
-using CSharp.Core.Extensions;
+using DTC.Core.Extensions;
 
 namespace DTC.Z80.Instructions;
 

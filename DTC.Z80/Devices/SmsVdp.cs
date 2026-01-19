@@ -9,10 +9,10 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System.Text;
-using CSharp.Core;
-using CSharp.Core.Image;
+using DTC.Core;
+using DTC.Core.Image;
 
-using CSharp.Core.Extensions;
+using DTC.Core.Extensions;
 
 namespace DTC.Z80.Devices;
 

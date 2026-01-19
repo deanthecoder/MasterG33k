@@ -15,7 +15,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.Platform.Storage;
-using CSharp.Core;
+using DTC.Core;
 using MasterG33k.ViewModels;
 
 namespace MasterG33k.Views;

@@ -13,7 +13,7 @@ using System.Reflection;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
-using CSharp.Core.UI;
+using DTC.Core.UI;
 
 namespace MasterG33k.ViewModels;
 

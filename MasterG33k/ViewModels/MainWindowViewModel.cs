@@ -17,11 +17,11 @@ using System.Reflection;
 using System.Threading;
 using Avalonia;
 using Avalonia.Media;
-using CSharp.Core;
-using CSharp.Core.Commands;
-using CSharp.Core.Extensions;
-using CSharp.Core.UI;
-using CSharp.Core.ViewModels;
+using DTC.Core;
+using DTC.Core.Commands;
+using DTC.Core.Extensions;
+using DTC.Core.UI;
+using DTC.Core.ViewModels;
 using DTC.Z80;
 using DTC.Z80.Devices;
 

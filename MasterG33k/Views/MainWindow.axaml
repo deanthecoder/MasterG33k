@@ -4,9 +4,9 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:viewModels="clr-namespace:MasterG33k.ViewModels"
         xmlns:dialogHostAvalonia="clr-namespace:DialogHostAvalonia;assembly=DialogHost.Avalonia"
-        xmlns:coreUi="clr-namespace:CSharp.Core.UI;assembly=CSharp.Core"
         xmlns:converters="clr-namespace:MasterG33k.Converters"
         xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+        xmlns:ui="clr-namespace:DTC.Core.UI;assembly=DTC.Core"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="MasterG33k.Views.MainWindow"
         x:DataType="viewModels:MainWindowViewModel"
@@ -152,8 +152,7 @@
                         <MenuItem Header="_About..."
                                   Command="{Binding OpenDialogCommand, ElementName=Host}">
                             <MenuItem.CommandParameter>
-                                <coreUi:AboutDialogContent AboutInfo="{Binding AboutInfo}"
-                                                           PointerPressed="OnAboutDialogClicked" />
+                                <ui:AboutDialogContent AboutInfo="{Binding AboutInfo}" PointerPressed="OnAboutDialogClicked" />
                             </MenuItem.CommandParameter>
                         </MenuItem>
                     </MenuItem>

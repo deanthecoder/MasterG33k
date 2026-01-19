@@ -11,7 +11,7 @@
 using System;
 using System.Globalization;
 using Avalonia.Data.Converters;
-using CSharp.Core.ViewModels;
+using DTC.Core.ViewModels;
 
 namespace MasterG33k.Converters;
 

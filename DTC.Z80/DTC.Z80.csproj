@@ -18,7 +18,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\DTC.Core\CSharp.Core\CSharp.Core.csproj" />
+    <ProjectReference Include="..\DTC.Core\DTC.Core\DTC.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
