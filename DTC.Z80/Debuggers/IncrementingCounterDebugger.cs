@@ -27,9 +27,9 @@ public sealed class IncrementingCounterDebugger : CpuDebuggerBase
 
     private struct CandidateState
     {
-        public byte m_lastValue;
-        public bool m_isArmed;
-        public bool m_hasHitTarget;
+        public byte LastValue;
+        public bool IsArmed;
+        public bool HasHitTarget;
     }
 
     private bool m_isInitialized;
@@ -76,12 +76,12 @@ public sealed class IncrementingCounterDebugger : CpuDebuggerBase
         if (!m_states.TryGetValue(address, out var state))
             return;
 
-        if (!state.m_isArmed)
+        if (!state.IsArmed)
         {
-            state.m_lastValue = value;
+            state.LastValue = value;
             if (value == m_startValue)
             {
-                state.m_isArmed = true;
+                state.IsArmed = true;
                 m_candidates.Add(address);
                 m_reportedEmpty = false;
                 if (!m_reportedSingleCandidate && m_candidates.Count == 1)
@@ -91,7 +91,7 @@ public sealed class IncrementingCounterDebugger : CpuDebuggerBase
             return;
         }
 
-        var previous = state.m_lastValue;
+        var previous = state.LastValue;
         if (value == previous)
             return;
 
@@ -120,9 +120,9 @@ public sealed class IncrementingCounterDebugger : CpuDebuggerBase
                 var isArmed = value == m_startValue;
                 m_states[address] = new CandidateState
                 {
-                    m_lastValue = value,
-                    m_isArmed = isArmed,
-                    m_hasHitTarget = false
+                    LastValue = value,
+                    IsArmed = isArmed,
+                    HasHitTarget = false
                 };
                 if (isArmed)
                     m_candidates.Add(address);
@@ -157,10 +157,10 @@ public sealed class IncrementingCounterDebugger : CpuDebuggerBase
                 continue;
 
             var current = bus.Read8(candidate);
-            if (current == state.m_lastValue)
+            if (current == state.LastValue)
                 continue;
 
-            var previous = state.m_lastValue;
+            var previous = state.LastValue;
             var delta = (byte)(current - previous);
             if (delta != 1)
             {
@@ -179,7 +179,7 @@ public sealed class IncrementingCounterDebugger : CpuDebuggerBase
         {
             m_singleCandidate = candidate;
             m_reportedSingleCandidate = true;
-            var message = $"[Counter Detector] Single candidate remains at {candidate:X4} (value {m_states[candidate].m_lastValue:X2}).";
+            var message = $"[Counter Detector] Single candidate remains at {candidate:X4} (value {m_states[candidate].LastValue:X2}).";
             cpu.InstructionLogger.Write(() => message);
             Logger.Instance.Info(message);
             break;
@@ -190,7 +190,7 @@ public sealed class IncrementingCounterDebugger : CpuDebuggerBase
     {
         foreach (var state in m_states.Values)
         {
-            if (!state.m_isArmed)
+            if (!state.IsArmed)
                 return true;
         }
 
@@ -199,15 +199,15 @@ public sealed class IncrementingCounterDebugger : CpuDebuggerBase
 
     private void ProcessValueChange(Cpu cpu, ushort address, byte previous, byte current, ref CandidateState state)
     {
-        state.m_lastValue = current;
+        state.LastValue = current;
         var message = $"[Counter Detector] {address:X4} incremented from {previous:X2} to {current:X2}.";
         cpu.InstructionLogger.Write(() => message);
         Logger.Instance.Info(message);
         LogCandidateCountChange(cpu);
 
-        if (!state.m_hasHitTarget && current == m_targetValue)
+        if (!state.HasHitTarget && current == m_targetValue)
         {
-            state.m_hasHitTarget = true;
+            state.HasHitTarget = true;
             var targetMessage = $"[Counter Detector] {address:X4} reached target {m_targetValue:X2}.";
             cpu.InstructionLogger.Write(() => targetMessage);
             Logger.Instance.Info(targetMessage);

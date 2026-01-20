@@ -48,18 +48,14 @@ public sealed class SmsJoypad : IDisposable
     /// <summary>
     /// Gets or sets whether key press events should update the button state.
     /// </summary>
-    private bool HandlePressEvents
+    private void SetHandlePressEvents(bool value)
     {
-        get => m_handlePressEvents;
-        set
-        {
-            if (m_handlePressEvents == value)
-                return;
+        if (m_handlePressEvents == value)
+            return;
 
-            m_handlePressEvents = value;
-            if (!value)
-                ClearState();
-        }
+        m_handlePressEvents = value;
+        if (!value)
+            ClearState();
     }
 
     public SmsJoypadButtons GetPressedButtons()
@@ -69,10 +65,7 @@ public sealed class SmsJoypad : IDisposable
     }
 
     public void SetInputEnabled(bool isEnabled) =>
-        HandlePressEvents = isEnabled;
-
-    public IDisposable CreatePressBlocker() =>
-        new PressBlocker(this);
+        SetHandlePressEvents(isEnabled);
 
     internal void InjectKey(KeyCode keyCode, bool isPressed) =>
         HandleKey(keyCode, isPressed);
@@ -82,7 +75,7 @@ public sealed class SmsJoypad : IDisposable
         if (!m_handlePressEvents)
             return;
 
-        // Console Pause (maps to NMI). Fire on key press only.
+        // Console Pause. Fire on key press only.
         if (keyCode == KeyCode.VcP && isPressed)
         {
             PausePressed?.Invoke(this, EventArgs.Empty);
@@ -169,22 +162,6 @@ public sealed class SmsJoypad : IDisposable
         Right = 1 << 3,
         Button1 = 1 << 4,
         Button2 = 1 << 5
-    }
-
-    private sealed class PressBlocker : IDisposable
-    {
-        private readonly SmsJoypad m_joypad;
-        private readonly bool m_oldHandlePressEvents;
-
-        internal PressBlocker(SmsJoypad joypad)
-        {
-            m_joypad = joypad;
-            m_oldHandlePressEvents = joypad.HandlePressEvents;
-            joypad.HandlePressEvents = false;
-        }
-
-        public void Dispose() =>
-            m_joypad.HandlePressEvents = m_oldHandlePressEvents;
     }
 
     private void SetAutoFireHeld(SmsJoypadButtons button, bool isPressed)

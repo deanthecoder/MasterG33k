@@ -26,7 +26,7 @@ public sealed class ZexDocTests : TestsBase
     [Test, Explicit]
     public void RunTests()
     {
-        var romFile = ProjectDir.Parent.GetDir("external").GetFile("zexdoc.sms");
+        using var romFile = ProjectDir.Parent.GetDir("external").GetFile("zexdoc.sms").AsTempFile();
         Assert.That(romFile, Does.Exist);
         var romData = romFile.ReadAllBytes();
 
