@@ -67,7 +67,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\DTC.Core\CSharp.Core\CSharp.Core.csproj" />
       <ProjectReference Include="..\DTC.Z80\DTC.Z80.csproj" />
     </ItemGroup>
 

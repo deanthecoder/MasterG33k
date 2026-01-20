@@ -33,17 +33,4 @@ public sealed class Memory : IMemDevice
     public byte Read8(ushort address) => Data[address % Data.Length];
 
     public void Write8(ushort address, byte value) => Data[address % Data.Length] = value;
-
-    public ushort Read16(ushort address)
-    {
-        var lo = Read8(address);
-        var hi = Read8((ushort)(address + 1));
-        return (ushort)(hi << 8 | lo);
-    }
-
-    public void Write16(ushort address, ushort value)
-    {
-        Write8(address, (byte)(value & 0xFF));
-        Write8((ushort)(address + 1), (byte)(value >> 8));
-    }
 }

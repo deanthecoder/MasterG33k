@@ -21,9 +21,10 @@ public class Settings : UserSettingsBase
     protected override void ApplyDefaults()
     {
         IsSoundEnabled = true;
-        IsAmbientBlurred = false;
+        IsAmbientBlurred = true;
         IsBackgroundVisible = true;
         AreSpritesVisible = true;
+        IsCrtEmulationEnabled = true;
         IsCpuHistoryTracked = false;
         MruFiles = string.Empty;
         LastRomPath = string.Empty;
@@ -53,6 +54,11 @@ public class Settings : UserSettingsBase
         set => Set(value);
     }
 
+    public bool IsCrtEmulationEnabled
+    {
+        get => Get<bool>();
+        set => Set(value);
+    }
 
     public bool IsCpuHistoryTracked
     {

@@ -17,9 +17,6 @@ public sealed class SmsMemoryController : IMemDevice
 {
     private const int SlotSize = 0x4000;
     private byte[] m_bios;
-    private SmsRomDevice m_biosRom;
-    private SmsRomDevice m_cartridge;
-    private byte m_port3E;
     private bool m_forceCartridgeEnabled;
 
     public ushort FromAddr => 0x0000;
@@ -28,52 +25,52 @@ public sealed class SmsMemoryController : IMemDevice
     public void Reset()
     {
         // Power-on defaults: BIOS, RAM and IO enabled; expansion/card/cartridge disabled.
-        m_port3E = (byte)((m_bios == null && m_biosRom == null) ? 0x00 : 0xE0);
+        Control = (byte)((m_bios == null && BiosRom == null) ? 0x00 : 0xE0);
         if (m_forceCartridgeEnabled)
-            m_port3E = (byte)(m_port3E & ~0x40);
+            Control = (byte)(Control & ~0x40);
     }
 
     public void SetBios(byte[] bios)
     {
         m_bios = bios;
-        m_biosRom = null;
+        BiosRom = null;
     }
 
     public void SetBiosRom(SmsRomDevice biosRom)
     {
-        m_biosRom = biosRom;
+        BiosRom = biosRom;
         m_bios = null;
     }
 
     public void SetCartridge(SmsRomDevice cartridge, bool forceEnabled = false)
     {
-        m_cartridge = cartridge;
+        Cartridge = cartridge;
         m_forceCartridgeEnabled = forceEnabled;
         if (m_forceCartridgeEnabled)
-            m_port3E = (byte)(m_port3E & ~0x40);
+            Control = (byte)(Control & ~0x40);
     }
 
     public void WriteControl(byte value)
     {
         if (m_forceCartridgeEnabled)
             value = (byte)(value & ~0x40);
-        m_port3E = value;
+        Control = value;
     }
 
-    public byte Control => m_port3E;
+    public byte Control { get; private set; }
 
     public byte Read8(ushort addr)
     {
         if (IsBiosEnabled)
         {
-            if (m_biosRom != null)
-                return m_biosRom.Read8(addr);
+            if (BiosRom != null)
+                return BiosRom.Read8(addr);
             if (addr < SlotSize && m_bios?.Length > 0)
                 return m_bios[addr % m_bios.Length];
         }
 
-        if (IsCartridgeEnabled && m_cartridge != null)
-            return m_cartridge.Read8(addr);
+        if (IsCartridgeEnabled && Cartridge != null)
+            return Cartridge.Read8(addr);
 
         return 0xFF;
     }
@@ -82,30 +79,11 @@ public sealed class SmsMemoryController : IMemDevice
     {
     }
 
-    public bool IsBiosEnabled => (m_port3E & 0x08) == 0;
+    public bool IsBiosEnabled => (Control & 0x08) == 0;
 
-    public bool IsCartridgeEnabled => (m_port3E & 0x40) == 0;
+    public bool IsCartridgeEnabled => (Control & 0x40) == 0;
 
-    public bool IsRamEnabled => (m_port3E & 0x10) == 0;
+    public SmsRomDevice BiosRom { get; private set; }
 
-    public bool IsIoEnabled => (m_port3E & 0x04) == 0;
-
-    public string GetDebugSummary() =>
-        $"0x{m_port3E:X2} BIOS={(IsBiosEnabled ? "on" : "off")} CART={(IsCartridgeEnabled ? "on" : "off")} RAM={(IsRamEnabled ? "on" : "off")} IO={(IsIoEnabled ? "on" : "off")} BIOSSize={GetBiosSize()} Vec38={GetBiosVectorByte():X2}";
-
-    public SmsRomDevice BiosRom => m_biosRom;
-
-    public SmsRomDevice Cartridge => m_cartridge;
-
-    private byte GetBiosVectorByte()
-    {
-        if (m_biosRom != null)
-            return m_biosRom.Read8(0x0038);
-        if (m_bios == null || m_bios.Length <= 0x38)
-            return 0xFF;
-
-        return m_bios[0x38];
-    }
-
-    private int GetBiosSize() => m_biosRom?.RomSize ?? m_bios?.Length ?? 0;
+    public SmsRomDevice Cartridge { get; private set; }
 }

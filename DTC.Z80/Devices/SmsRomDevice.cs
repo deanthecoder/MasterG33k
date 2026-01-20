@@ -27,7 +27,6 @@ public sealed class SmsRomDevice : IMemDevice
     private byte m_bank0Mapped;
     private byte m_bank1Mapped;
     private byte m_bank2Mapped;
-    private byte m_control;
 
     public ushort FromAddr => 0x0000;
     public ushort ToAddr => 0xBFFF;
@@ -49,9 +48,9 @@ public sealed class SmsRomDevice : IMemDevice
         SetBank2((byte)(m_bankCount - 1));
     }
 
-    public void SetControl(byte value) => m_control = value;
-
-    public byte Control => m_control;
+    public void SetControl(byte value)
+    {
+    }
 
     public void SetBank0(byte value)
     {

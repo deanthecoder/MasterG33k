@@ -29,6 +29,7 @@ namespace MasterG33k.ViewModels;
 
 public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 {
+    private const int PauseRefreshIntervalMs = 33;
     private string m_windowTitle;
     private bool m_isSoundChannel1Enabled = true;
     private bool m_isSoundChannel2Enabled = true;
@@ -40,15 +41,18 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly SmsJoypad m_joypad;
     private readonly SmsMemoryController m_memoryController;
     private readonly Lock m_cpuStepLock = new();
+    private readonly ManualResetEventSlim m_cpuPauseEvent = new(initialState: true);
     private Thread m_cpuThread;
     private bool m_shutdownRequested;
-    private volatile bool m_pauseNmiRequested;
+    private volatile bool m_isCpuPaused;
     private readonly ClockSync m_clockSync;
     private readonly LcdScreen m_screen;
+    private volatile bool m_isPaused;
     private long m_lastCpuTStates;
     private uint m_lastFrameChecksum;
     private long m_lastFrameTicks;
     private bool m_hasFrameChecksum;
+    private volatile byte[] m_lastFrameBuffer;
 
     public MruFiles Mru { get; }
     public IImage Display { get; }
@@ -122,6 +126,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         m_screen = new LcdScreen(SmsVdp.FrameWidth, SmsVdp.FrameHeight);
         Display = m_screen.Display;
+        m_screen.FrameBuffer.IsCrt = Settings.IsCrtEmulationEnabled;
         m_vdp = new SmsVdp();
         m_vdp.FrameRendered += OnFrameRendered;
         m_joypad = new SmsJoypad();
@@ -129,8 +134,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         var portDevice = new SmsPortDevice(m_vdp, m_joypad, m_memoryController);
         m_joypad.PausePressed += (_, _) =>
         {
-            // Map Pause to NMI on the CPU without blocking the UI thread.
-            m_pauseNmiRequested = true;
+            ToggleCpuPause();
         };
         m_cpu = new Cpu(new Bus(new Memory(), portDevice));
         m_cpu.Bus.Attach(new SmsRamMirrorDevice(m_cpu.MainMemory));
@@ -147,6 +151,11 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public void ToggleAmbientBlur()
     {
         Settings.IsAmbientBlurred = !Settings.IsAmbientBlurred;
+    }
+
+    public void ToggleCrtEmulation()
+    {
+        Settings.IsCrtEmulationEnabled = !Settings.IsCrtEmulationEnabled;
     }
 
     public void ToggleBackgroundVisibility()
@@ -210,6 +219,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             m_memoryController.SetCartridge(romDevice, forceEnabled: false);
             m_memoryController.SetBiosRom(romDevice);
             m_memoryController.Reset();
+            SetPaused(false);
             LogRomInfo(biosFile, biosData, romDevice.BankCount);
             StartCpuIfNeeded();
             return;
@@ -217,6 +227,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         m_memoryController.SetBios(biosData);
         m_memoryController.Reset();
+        SetPaused(false);
         LogRomInfo(biosFile, biosData, bankCount: 1);
         StartCpuIfNeeded();
     }
@@ -303,6 +314,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             m_clockSync.Reset();
             m_lastCpuTStates = 0;
         }
+        SetPaused(false);
         Logger.Instance.Info("CPU reset.");
     }
 
@@ -332,6 +344,11 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     {
         if (e.PropertyName == nameof(Settings.IsSoundEnabled))
             return;
+        if (e.PropertyName == nameof(Settings.IsCrtEmulationEnabled))
+        {
+            m_screen.FrameBuffer.IsCrt = Settings.IsCrtEmulationEnabled;
+            return;
+        }
         if (e.PropertyName == nameof(Settings.IsBackgroundVisible) ||
             e.PropertyName == nameof(Settings.AreSpritesVisible))
         {
@@ -349,9 +366,6 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         m_vdp.IsBackgroundVisible = Settings.IsBackgroundVisible;
         m_vdp.AreSpritesVisible = Settings.AreSpritesVisible;
     }
-
-    internal void LoadRomFile(FileInfo romFile, bool addToMru = true) =>
-        LoadRomFromFile(romFile, addToMru);
 
     internal void LoadRomFromFile(FileInfo romFile, bool addToMru)
     {
@@ -385,6 +399,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             m_clockSync.Reset();
             m_lastCpuTStates = 0;
         }
+        SetPaused(false);
 
         if (addToMru)
             Mru.Add(romFile);
@@ -394,6 +409,15 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         WindowTitle = $"MasterG33k - {m_currentRomTitle}";
         StartCpuIfNeeded();
         LogRomInfo(romFile, romData, romDevice.BankCount);
+    }
+
+    private void SetPaused(bool isPaused)
+    {
+        if (m_isPaused == isPaused)
+            return;
+
+        m_isPaused = isPaused;
+        m_screen.FrameBuffer.IsPaused = isPaused;
     }
 
     public void Dispose()
@@ -427,6 +451,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             return;
 
         m_shutdownRequested = true;
+        m_cpuPauseEvent.Set();
         if (!m_cpuThread.Join(TimeSpan.FromSeconds(2)))
             m_cpuThread.Interrupt();
         m_cpuThread = null;
@@ -438,14 +463,16 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         {
             while (!m_shutdownRequested)
             {
+                if (!m_cpuPauseEvent.IsSet)
+                {
+                    m_cpuPauseEvent.Wait(TimeSpan.FromMilliseconds(PauseRefreshIntervalMs));
+                    RefreshPausedFrame();
+                    continue;
+                }
+
                 m_clockSync.SyncWithRealTime();
                 lock (m_cpuStepLock)
                 {
-                    if (m_pauseNmiRequested)
-                    {
-                        m_pauseNmiRequested = false;
-                        m_cpu.RequestNmi();
-                    }
                     m_cpu.Step();
                     var current = m_cpu.TStatesSinceCpuStart;
                     var delta = current - m_lastCpuTStates;
@@ -467,15 +494,68 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
+    private void ToggleCpuPause()
+    {
+        bool isPaused;
+        byte[] frameBufferCopy;
+
+        lock (m_cpuStepLock)
+        {
+            m_isCpuPaused = !m_isCpuPaused;
+            isPaused = m_isCpuPaused;
+            if (m_isCpuPaused)
+            {
+                m_cpuPauseEvent.Reset();
+            }
+            else
+            {
+                m_clockSync.Resync();
+                m_cpuPauseEvent.Set();
+            }
+
+            frameBufferCopy = m_lastFrameBuffer;
+        }
+
+        SetPaused(isPaused);
+        if (frameBufferCopy != null)
+        {
+            m_screen.Update(frameBufferCopy);
+            DisplayUpdated?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
     private void OnFrameRendered(object sender, byte[] frameBuffer)
     {
         if (frameBuffer == null || frameBuffer.Length == 0)
             return;
 
+        var bufferCopy = new byte[frameBuffer.Length];
+        Buffer.BlockCopy(frameBuffer, 0, bufferCopy, 0, frameBuffer.Length);
+        m_lastFrameBuffer = bufferCopy;
         m_lastFrameChecksum = ComputeFrameChecksum(frameBuffer);
         m_lastFrameTicks = m_cpu.TStatesSinceCpuStart;
         m_hasFrameChecksum = true;
         m_screen.Update(frameBuffer);
+        DisplayUpdated?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void RefreshPausedFrame()
+    {
+        if (!m_isPaused)
+            return;
+
+        var frameBuffer = m_lastFrameBuffer;
+        if (frameBuffer == null)
+            return;
+
+        lock (m_cpuStepLock)
+        {
+            if (!m_isPaused)
+                return;
+
+            m_screen.Update(frameBuffer);
+        }
+
         DisplayUpdated?.Invoke(this, EventArgs.Empty);
     }
 

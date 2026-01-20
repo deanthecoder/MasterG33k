@@ -17,14 +17,14 @@ namespace DTC.Z80;
 public sealed class Bus
 {
     private readonly IMemDevice[] m_devices = new IMemDevice[0x10000];
+    private readonly IPortDevice m_portDevice;
 
     public Memory MainMemory { get; }
-    public IPortDevice PortDevice { get; private set; }
 
     public Bus(Memory memory, IPortDevice portDevice = null)
     {
         MainMemory = memory ?? throw new ArgumentNullException(nameof(memory));
-        PortDevice = portDevice ?? DefaultPortDevice.Instance;
+        m_portDevice = portDevice ?? DefaultPortDevice.Instance;
         Attach(MainMemory);
     }
     
@@ -50,15 +50,9 @@ public sealed class Bus
         return (ushort)(hi << 8 | lo);
     }
 
-    public void Write16(ushort address, ushort value)
-    {
-        Write8(address, (byte)(value & 0xFF));
-        Write8((ushort)(address + 1), (byte)(value >> 8));
-    }
-
     public byte ReadPort(ushort portAddress) =>
-        PortDevice?.Read8(portAddress) ?? 0xFF;
+        m_portDevice?.Read8(portAddress) ?? 0xFF;
 
     public void WritePort(ushort portAddress, byte value) =>
-        PortDevice?.Write8(portAddress, value);
+        m_portDevice?.Write8(portAddress, value);
 }
