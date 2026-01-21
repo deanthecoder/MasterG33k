@@ -19,17 +19,11 @@ namespace DTC.Z80.Devices;
 public sealed class SmsRomDevice : IMemDevice
 {
     private const int BankSize = 0x4000;
-    private const int SramBankSize = 0x2000;
     private readonly byte[] m_data;
     private readonly int m_bankCount;
-    private readonly byte[] m_sram = new byte[SramBankSize * 2];
-    private byte m_bank0Raw;
-    private byte m_bank1Raw;
-    private byte m_bank2Raw;
     private byte m_bank0Mapped;
     private byte m_bank1Mapped;
     private byte m_bank2Mapped;
-    private byte m_control;
 
     public ushort FromAddr => 0x0000;
     public ushort ToAddr => 0xBFFF;
@@ -50,45 +44,40 @@ public sealed class SmsRomDevice : IMemDevice
         SetBank1((byte)Math.Min(1, m_bankCount - 1));
         SetBank2((byte)(m_bankCount - 1));
 
-        Array.Fill(m_sram, (byte)0xFF);
     }
 
-    public void SetControl(byte value) => m_control = value;
+    public void SetControl(byte value) => Control = value;
 
-    public byte Control => m_control;
+    public byte Control { get; private set; }
 
     public void SetBank0(byte value)
     {
-        m_bank0Raw = NormalizeBank(value);
-        m_bank0Mapped = ApplyBankShift(m_bank0Raw);
+        Bank0 = NormalizeBank(value);
+        m_bank0Mapped = ApplyBankShift(Bank0);
     }
 
     public void SetBank1(byte value)
     {
-        m_bank1Raw = NormalizeBank(value);
-        m_bank1Mapped = ApplyBankShift(m_bank1Raw);
+        Bank1 = NormalizeBank(value);
+        m_bank1Mapped = ApplyBankShift(Bank1);
     }
 
     public void SetBank2(byte value)
     {
-        m_bank2Raw = NormalizeBank(value);
-        m_bank2Mapped = ApplyBankShift(m_bank2Raw);
+        Bank2 = NormalizeBank(value);
+        m_bank2Mapped = ApplyBankShift(Bank2);
     }
 
-    public byte Bank0 => m_bank0Raw;
-    public byte Bank1 => m_bank1Raw;
-    public byte Bank2 => m_bank2Raw;
-    public int BankCount => m_bankCount;
+    public byte Bank0 { get; private set; }
+
+    public byte Bank1 { get; private set; }
+
+    public byte Bank2 { get; private set; }
+
     public int RomSize => m_data.Length;
 
     public byte Read8(ushort addr)
     {
-        if (IsRamEnabled && addr >= 0x8000)
-        {
-            var offset = (addr - 0x8000) % SramBankSize;
-            return m_sram[(RamBank * SramBankSize) + offset];
-        }
-
         if (addr <= 0x3FFF)
         {
             if (addr < 0x0400)
@@ -102,11 +91,6 @@ public sealed class SmsRomDevice : IMemDevice
 
     public void Write8(ushort addr, byte value)
     {
-        if (IsRamEnabled && addr >= 0x8000 && addr <= 0xBFFF)
-        {
-            var offset = (addr - 0x8000) % SramBankSize;
-            m_sram[(RamBank * SramBankSize) + offset] = value;
-        }
     }
 
     private byte ReadBanked(byte bank, int offset)
@@ -129,7 +113,4 @@ public sealed class SmsRomDevice : IMemDevice
         return bank;
     }
 
-    private bool IsRamEnabled => (m_control & 0x08) != 0;
-
-    private int RamBank => (m_control & 0x04) != 0 ? 1 : 0;
 }

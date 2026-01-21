@@ -62,10 +62,10 @@ public sealed class SmsMapperDevice : IMemDevice
 
     private SmsRomDevice GetActiveRom()
     {
+        if (m_memoryController.IsBiosEnabled && m_memoryController.BiosRom != null)
+            return m_memoryController.BiosRom;
         if (m_memoryController.IsCartridgeEnabled)
             return m_memoryController.Cartridge;
-        if (m_memoryController.IsBiosEnabled)
-            return m_memoryController.BiosRom;
         return null;
     }
 }

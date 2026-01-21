@@ -26,10 +26,13 @@ public sealed class MemoryMapperTests
 
         Assert.That(memory.Read8(0xDFFC), Is.EqualTo(0x5A));
         Assert.That(mapper.Read8(0xFFFC), Is.EqualTo(0x5A));
+
+        memory.Write8(0xDFFD, 0x3C);
+        Assert.That(mapper.Read8(0xFFFD), Is.EqualTo(0x3C));
     }
 
     [Test]
-    public void GivenMirrorWriteCheckMapperRegistersUpdate()
+    public void GivenRamMirrorWriteCheckMapperRegistersUnchanged()
     {
         var cartData = CreateBankedRom(0x8000, 0x11, 0x22);
 
@@ -40,56 +43,39 @@ public sealed class MemoryMapperTests
 
         var memory = new Memory();
         var mapper = new SmsMapperDevice(controller, memory);
-        var mirror = new SmsMapperMirrorDevice(mapper);
 
-        mirror.Write8(0xDFFE, 0x00);
+        Assert.That(cartRom.Bank1, Is.EqualTo(1));
 
+        memory.Write8(0xDFFE, 0x00);
+        Assert.That(cartRom.Bank1, Is.EqualTo(1));
+        Assert.That(mapper.Read8(0xFFFE), Is.EqualTo(0x00));
+
+        mapper.Write8(0xFFFE, 0x00);
         Assert.That(cartRom.Bank1, Is.EqualTo(0));
-        Assert.That(memory.Read8(0xDFFE), Is.EqualTo(0x00));
     }
 
     [Test]
-    public void GivenBiosEnabledCheckMapperTargetsCartridge()
+    public void GivenBiosEnabledCheckMapperTargetsBios()
     {
-        var biosData = CreateFilledRom(0x4000, 0x10);
+        var biosData = CreateBankedRom(0x8000, 0x10, 0x33);
         var cartData = CreateBankedRom(0x8000, 0x11, 0x22);
 
         var controller = new SmsMemoryController();
         var cartRom = new SmsRomDevice(cartData);
-        controller.SetBiosRom(new SmsRomDevice(biosData));
+        var biosRom = new SmsRomDevice(biosData);
+        controller.SetBiosRom(biosRom);
         controller.SetCartridge(cartRom, forceEnabled: true);
         controller.Reset();
 
         var mapper = new SmsMapperDevice(controller, new Memory());
 
         Assert.That(cartRom.Bank1, Is.EqualTo(1));
+        Assert.That(biosRom.Bank1, Is.EqualTo(1));
 
         mapper.Write8(0xFFFE, 0x00);
 
-        Assert.That(cartRom.Bank1, Is.EqualTo(0));
-    }
-
-    [Test]
-    public void GivenSramEnabledCheckReadsAndWrites()
-    {
-        var cartData = CreateFilledRom(0x4000, 0x77);
-
-        var controller = new SmsMemoryController();
-        controller.SetCartridge(new SmsRomDevice(cartData), forceEnabled: true);
-        controller.Reset();
-
-        var mapper = new SmsMapperDevice(controller, new Memory());
-
-        mapper.Write8(0xFFFC, 0x08);
-        controller.Write8(0x8000, 0x5A);
-        Assert.That(controller.Read8(0x8000), Is.EqualTo(0x5A));
-
-        mapper.Write8(0xFFFC, 0x0C);
-        controller.Write8(0x8000, 0xA5);
-        Assert.That(controller.Read8(0x8000), Is.EqualTo(0xA5));
-
-        mapper.Write8(0xFFFC, 0x08);
-        Assert.That(controller.Read8(0x8000), Is.EqualTo(0x5A));
+        Assert.That(cartRom.Bank1, Is.EqualTo(1));
+        Assert.That(biosRom.Bank1, Is.EqualTo(0));
     }
 
     [Test]
@@ -110,14 +96,7 @@ public sealed class MemoryMapperTests
 
         Assert.That(biosRom.Bank1, Is.EqualTo(0));
     }
-
-    private static byte[] CreateFilledRom(int size, byte value)
-    {
-        var data = new byte[size];
-        Array.Fill(data, value);
-        return data;
-    }
-
+    
     private static byte[] CreateBankedRom(int size, byte bank0, byte bank1)
     {
         var data = new byte[size];

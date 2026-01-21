@@ -132,15 +132,13 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         m_vdp.FrameRendered += OnFrameRendered;
         m_joypad = new SmsJoypad();
         m_memoryController = new SmsMemoryController();
-        var mainMemory = new Memory();
         var portDevice = new SmsPortDevice(m_vdp, m_joypad, m_memoryController);
         m_joypad.PausePressed += (_, _) =>
         {
             ToggleCpuPause();
         };
-        m_cpu = new Cpu(new Bus(mainMemory, portDevice));
-        m_cpu.Bus.Attach(new SmsSystemRamDevice(m_cpu.MainMemory, m_memoryController));
-        m_cpu.Bus.Attach(new SmsSystemRamMirrorDevice(m_cpu.MainMemory, m_memoryController));
+        m_cpu = new Cpu(new Bus(new Memory(), portDevice));
+        m_cpu.Bus.Attach(new SmsRamMirrorDevice(m_cpu.MainMemory));
         m_cpu.Bus.Attach(m_memoryController);
         m_clockSync = new ClockSync(GetEffectiveCpuHz, () => m_cpu.TStatesSinceCpuStart, () => m_cpu.Reset());
         Settings.PropertyChanged += OnSettingsPropertyChanged;
@@ -234,14 +232,13 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         command.Execute(null);
     }
 
-    private static void LogRomInfo(FileInfo romFile, byte[] romData, int bankCount)
+    private static void LogRomInfo(FileInfo romFile, byte[] romData)
     {
         var name = romFile.LeafName();
         var headerOffset = FindSmsHeaderOffset(romData);
         var manufacturer = headerOffset >= 0 ? "SEGA" : "Unknown";
-        var headerInfo = headerOffset >= 0 ? $"Header @ 0x{headerOffset:X4}" : "Header not found";
         var sizeKb = romData.Length / 1024.0;
-        Logger.Instance.Info($"ROM loaded: {name} ({sizeKb:0.#} KB, Banks={bankCount}, Maker={manufacturer}, {headerInfo})");
+        Logger.Instance.Info($"ROM loaded: {name} ({manufacturer}, {sizeKb:0.#} KB)");
     }
 
     private static int FindSmsHeaderOffset(byte[] romData)
@@ -361,7 +358,6 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         var romDevice = new SmsRomDevice(romData);
         var mapper = new SmsMapperDevice(m_memoryController, m_cpu.MainMemory);
         m_cpu.Bus.Attach(mapper);
-        m_cpu.Bus.Attach(new SmsMapperMirrorDevice(mapper));
         m_memoryController.SetBios(null);
         m_memoryController.SetCartridge(romDevice, forceEnabled: false);
         InitializePostRomState(romDevice);
@@ -373,7 +369,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         m_currentRomTitle = romName;
         WindowTitle = $"MasterG33k - {m_currentRomTitle}";
         StartCpuIfNeeded();
-        LogRomInfo(romFile, romData, romDevice.BankCount);
+        LogRomInfo(romFile, romData);
         return true;
     }
 
