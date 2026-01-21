@@ -18,6 +18,7 @@ using System.Threading;
 using Avalonia;
 using Avalonia.Media;
 using DTC.Core;
+using DTC.Core.Image;
 using DTC.Core.Commands;
 using DTC.Core.Extensions;
 using DTC.Core.UI;
@@ -207,11 +208,29 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     public void SaveScreenshot()
     {
-        // todo - ensure frame is complete. (Dump actual screen frame buffer instead?)
         var prefix = SanitizeFileName(m_currentRomTitle);
         var defaultName = $"{prefix}.tga";
         var command = new FileSaveCommand("Save Screenshot", "TGA Files", ["*.tga"], defaultName);
-        command.FileSelected += (_, info) => m_vdp.DumpFrame(info);
+        command.FileSelected += (_, info) =>
+        {
+            var frameBuffer = m_lastFrameBuffer;
+            if (frameBuffer == null || frameBuffer.Length == 0)
+            {
+                Logger.Instance.Warn("No frame available for screenshot.");
+                return;
+            }
+
+            var expectedSize = SmsVdp.FrameWidth * SmsVdp.FrameHeight * 4;
+            if (frameBuffer.Length != expectedSize)
+            {
+                Logger.Instance.Warn($"Screenshot aborted; expected {expectedSize} bytes but got {frameBuffer.Length}.");
+                return;
+            }
+
+            var frameCopy = new byte[frameBuffer.Length];
+            Buffer.BlockCopy(frameBuffer, 0, frameCopy, 0, frameBuffer.Length);
+            TgaWriter.Write(info, frameCopy, SmsVdp.FrameWidth, SmsVdp.FrameHeight, 4);
+        };
         command.Execute(null);
     }
 

@@ -9,8 +9,6 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using DTC.Core;
-using DTC.Core.Image;
-
 using DTC.Core.Extensions;
 
 namespace DTC.Z80.Devices;
@@ -541,24 +539,13 @@ public sealed class SmsVdp
 
     private (byte r, byte g, byte b) DecodeBackdropColor()
     {
-        // Mode 4: Reg 7 selects the backdrop/overscan colour from the sprite palette (CRAM 16-31).
+        // Mode 4: Reg 7 selects the backdrop/overscan color from the sprite palette (CRAM 16-31).
         var index = (m_registers[7] & 0x0F) | 0x10;
         var value = m_cram[index & 0x1F];
         var r = (byte)((value & 0x03) * 85);
         var g = (byte)(((value >> 2) & 0x03) * 85);
         var b = (byte)(((value >> 4) & 0x03) * 85);
         return (r, g, b);
-    }
-
-
-    /// <summary>
-    /// Dump the current frame buffer to disk (.tga).
-    /// </summary>
-    public void DumpFrame(FileInfo tgaFile)
-    {
-        if (tgaFile == null)
-            throw new ArgumentNullException(nameof(tgaFile));
-        TgaWriter.Write(tgaFile, m_frameBuffer, FrameWidth, FrameHeight, 4);
     }
 
     private void RenderSprites(bool displayEnabled)
