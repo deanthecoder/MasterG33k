@@ -27,8 +27,8 @@ public sealed class SmsVdp
     private const int VramSize = 0x4000;
     private const int CramSize = 32;
     private const int RegisterCount = 16;
-    private const int CyclesPerScanline = 228;
-    private const int TotalScanlines = 262;
+    public const int CyclesPerScanline = 228;
+    public const int TotalScanlines = 262;
     private const int VblankStartLine = 192;
     private const byte StatusVblankBit = 0x80;
     private const byte StatusSpriteOverflowBit = 0x40;
