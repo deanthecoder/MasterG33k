@@ -434,13 +434,13 @@ public sealed class SmsVdp
 
         if (!displayEnabled || !IsBackgroundVisible)
         {
-            var (bb, bg, br) = DecodeBackdropColor();
+            var (r, g, b) = DecodeBackdropColor();
             for (var x = 0; x < FrameWidth; x++)
             {
                 var offset = (y * FrameWidth + x) * 4;
-                m_frameBuffer[offset] = bb;
-                m_frameBuffer[offset + 1] = bg;
-                m_frameBuffer[offset + 2] = br;
+                m_frameBuffer[offset] = r;
+                m_frameBuffer[offset + 1] = g;
+                m_frameBuffer[offset + 2] = b;
                 m_frameBuffer[offset + 3] = 255;
                 m_bgPriority[(y * FrameWidth) + x] = 0;
             }
@@ -450,9 +450,9 @@ public sealed class SmsVdp
 
         for (var x = 0; x < FrameWidth; x++)
         {
-            var b = (byte)0;
-            var g = (byte)0;
             var r = (byte)0;
+            var g = (byte)0;
+            var b = (byte)0;
             var bgPriority = false;
             var colorIndex = 0;
 
@@ -460,9 +460,9 @@ public sealed class SmsVdp
             {
                 // Force backdrop colour; BG pixel is treated as transparent for priority purposes.
                 var offset = (y * FrameWidth + x) * 4;
-                m_frameBuffer[offset] = b;
+                m_frameBuffer[offset] = r;
                 m_frameBuffer[offset + 1] = g;
-                m_frameBuffer[offset + 2] = r;
+                m_frameBuffer[offset + 2] = b;
                 m_frameBuffer[offset + 3] = 255;
                 m_bgPriority[(y * FrameWidth) + x] = 0;
                 continue;
@@ -513,22 +513,22 @@ public sealed class SmsVdp
                              (((plane3 >> bit) & 0x01) << 3);
 
                 var decoded = DecodeColor(palette, colorIndex);
-                b = decoded.b;
-                g = decoded.g;
                 r = decoded.r;
+                g = decoded.g;
+                b = decoded.b;
             }
 
             var pixelOffset = (y * FrameWidth + x) * 4;
-            m_frameBuffer[pixelOffset] = b;
+            m_frameBuffer[pixelOffset] = r;
             m_frameBuffer[pixelOffset + 1] = g;
-            m_frameBuffer[pixelOffset + 2] = r;
+            m_frameBuffer[pixelOffset + 2] = b;
             m_frameBuffer[pixelOffset + 3] = 255;
 
             m_bgPriority[(y * FrameWidth) + x] = (byte)(bgPriority && colorIndex != 0 ? 1 : 0);
         }
     }
 
-    private (byte b, byte g, byte r) DecodeColor(int palette, int colorIndex)
+    private (byte r, byte g, byte b) DecodeColor(int palette, int colorIndex)
     {
         var cramIndex = (palette * 16 + colorIndex) & 0x1F;
         var value = m_cram[cramIndex];
@@ -536,10 +536,10 @@ public sealed class SmsVdp
         var r = (byte)((value & 0x03) * 85);
         var g = (byte)(((value >> 2) & 0x03) * 85);
         var b = (byte)(((value >> 4) & 0x03) * 85);
-        return (b, g, r);
+        return (r, g, b);
     }
 
-    private (byte b, byte g, byte r) DecodeBackdropColor()
+    private (byte r, byte g, byte b) DecodeBackdropColor()
     {
         // Mode 4: Reg 7 selects the backdrop/overscan colour from the sprite palette (CRAM 16-31).
         var index = (m_registers[7] & 0x0F) | 0x10;
@@ -547,7 +547,7 @@ public sealed class SmsVdp
         var r = (byte)((value & 0x03) * 85);
         var g = (byte)(((value >> 2) & 0x03) * 85);
         var b = (byte)(((value >> 4) & 0x03) * 85);
-        return (b, g, r);
+        return (r, g, b);
     }
 
 
@@ -558,23 +558,7 @@ public sealed class SmsVdp
     {
         if (tgaFile == null)
             throw new ArgumentNullException(nameof(tgaFile));
-        var rgba = ConvertBgraToRgba(m_frameBuffer);
-        TgaWriter.Write(tgaFile, rgba, FrameWidth, FrameHeight, 4);
-    }
-
-    // todo - Store as RGB. Update CrtFrameBuffer to use RGB.
-    private static byte[] ConvertBgraToRgba(byte[] buffer)
-    {
-        var converted = new byte[buffer.Length];
-        for (var i = 0; i + 3 < buffer.Length; i += 4)
-        {
-            converted[i] = buffer[i + 2];
-            converted[i + 1] = buffer[i + 1];
-            converted[i + 2] = buffer[i];
-            converted[i + 3] = buffer[i + 3];
-        }
-
-        return converted;
+        TgaWriter.Write(tgaFile, m_frameBuffer, FrameWidth, FrameHeight, 4);
     }
 
     private void RenderSprites(bool displayEnabled)
@@ -709,7 +693,7 @@ public sealed class SmsVdp
                 if (colorIndex == 0)
                     continue;
 
-                var (b, g, r) = DecodeColor(1, colorIndex);
+                var (r, g, b) = DecodeColor(1, colorIndex);
                 var destX = x + col * scale;
                 if (destX < 0 || destX >= FrameWidth)
                     continue;
@@ -739,9 +723,9 @@ public sealed class SmsVdp
                             continue;
 
                         var offset = rowOffset + (px - destX) * 4;
-                        m_frameBuffer[offset] = b;
+                        m_frameBuffer[offset] = r;
                         m_frameBuffer[offset + 1] = g;
-                        m_frameBuffer[offset + 2] = r;
+                        m_frameBuffer[offset + 2] = b;
                         m_frameBuffer[offset + 3] = 255;
                     }
                 }

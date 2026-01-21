@@ -38,9 +38,9 @@ public sealed class VdpRenderTests
 
         var frame = RenderFrame(vdp);
 
-        Assert.That(frame[0], Is.Zero);
+        Assert.That(frame[0], Is.EqualTo(255));
         Assert.That(frame[1], Is.Zero);
-        Assert.That(frame[2], Is.EqualTo(255));
+        Assert.That(frame[2], Is.Zero);
         Assert.That(frame[3], Is.EqualTo(255));
     }
 
