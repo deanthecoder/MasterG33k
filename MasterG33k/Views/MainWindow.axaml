@@ -60,10 +60,7 @@
                         <MenuItem Header="_Save Snapshot..." Command="{Binding SaveSnapshot}"
                                   InputGesture="{OnPlatform 'ctrl+s', macOS='⌘+s'}"
                                   IsEnabled="False" />
-                        <MenuItem Header="E_xport">
-                            <MenuItem Header="Save _Screenshot..." Command="{Binding SaveScreenshot}" />
-                            <MenuItem Header="Export _TileMap..." Command="{Binding ExportTileMap}" />
-                        </MenuItem>
+                        <MenuItem Header="Save _Screenshot..." Command="{Binding SaveScreenshot}" />
                         <MenuItem Header="Start _Recording" Command="{Binding StartRecording}"
                                   InputGesture="{OnPlatform 'ctrl+m', macOS='⌘+m'}"
                                   IsVisible="{Binding !IsRecording}"
@@ -147,8 +144,6 @@
                         <Separator />
                         <MenuItem Header="Report CPU Clock Ticks" Command="{Binding ReportCpuClockTicks}" />
                         <MenuItem Header="Report Frame Checksum + Ticks" Command="{Binding ReportFrameChecksum}" />
-                        <Separator />
-                        <MenuItem Header="Export Background Tile Map..." Command="{Binding ExportBackgroundTileMap}" />
                     </MenuItem>
 
                     <MenuItem Header="_Help">

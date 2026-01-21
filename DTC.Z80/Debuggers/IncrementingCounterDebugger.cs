@@ -27,9 +27,11 @@ public sealed class IncrementingCounterDebugger : CpuDebuggerBase
 
     private struct CandidateState
     {
+        // ReSharper disable InconsistentNaming
         public byte LastValue;
         public bool IsArmed;
         public bool HasHitTarget;
+        // ReSharper restore InconsistentNaming
     }
 
     private bool m_isInitialized;

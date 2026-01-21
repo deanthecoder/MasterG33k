@@ -256,25 +256,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     }
 
     public void OpenProjectPage() => new Uri("https://github.com/deanthecoder/MasterG33k").Open();
-
-    public void ExportTileMap()
-    {
-        var prefix = SanitizeFileName(m_currentRomTitle);
-        var defaultName = $"{prefix}-tilemap.tga";
-        var command = new FileSaveCommand("Export Tile Map", "TGA Files", ["*.tga"], defaultName);
-        command.FileSelected += (_, info) => m_vdp.DumpSpriteTileMap(info);
-        command.Execute(null);
-    }
-
-    public void ExportBackgroundTileMap()
-    {
-        var prefix = SanitizeFileName(m_currentRomTitle);
-        var defaultName = $"{prefix}-background-tilemap.txt";
-        var command = new FileSaveCommand("Export Background Tile Map", "Text Files", ["*.txt"], defaultName);
-        command.FileSelected += (_, info) => m_vdp.DumpBackgroundTileMapWithTiles(info);
-        command.Execute(null);
-    }
-
+    
     public void ResetDevice()
     {
         lock (m_cpuStepLock)
