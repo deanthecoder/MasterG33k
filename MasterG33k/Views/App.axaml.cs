@@ -7,17 +7,9 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
-using System;
-using System.IO;
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using DTC.Core;
-using DTC.Core.Extensions;
-using DTC.Core.UI;
-using DialogHostAvalonia;
-using Material.Icons;
 using MasterG33k.ViewModels;
 
 namespace MasterG33k.Views;
@@ -50,32 +42,9 @@ public class App : Application
                 viewModel.Dispose();
                 Settings.Instance.Dispose();
             };
-            mainWindow.Opened += (_, _) => EnsureBiosAvailable(desktop, viewModel);
+            mainWindow.Opened += (_, _) => viewModel.LoadLastRomOrPrompt();
         }
 
         base.OnFrameworkInitializationCompleted();
-    }
-
-    private static void EnsureBiosAvailable(IClassicDesktopStyleApplicationLifetime desktop, MainWindowViewModel viewModel)
-    {
-        var biosDir = new DirectoryInfo(AppContext.BaseDirectory).GetDir("BIOS");
-        var biosFile = biosDir.Exists
-            ? biosDir.EnumerateFiles("*.sms").FirstOrDefault()
-            : null;
-        if (biosFile != null)
-        {
-            viewModel.LoadBios(biosFile);
-            viewModel.TryLoadLastRom();
-            return;
-        }
-
-        Logger.Instance.Warn($"No Master System BIOS ROM found in '{biosDir.FullName}'. Shutting down.");
-        DialogHost.Show(new MessageDialog
-            {
-                Message = "No Master System BIOS ROM found.",
-                Detail = $"Copy your Sega Master System BIOS ROM (.sms) into:\n{biosDir.FullName}",
-                Icon = MaterialIconKind.AlertCircleOutline
-            },
-            (DialogClosingEventHandler)((_, _) => desktop.Shutdown()));
     }
 }

@@ -191,61 +191,28 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         command.Execute(null);
     }
 
+    public void LoadLastRomOrPrompt()
+    {
+        if (!string.IsNullOrEmpty(Settings.LastRomPath))
+        {
+            var romFile = new FileInfo(Settings.LastRomPath);
+            if (LoadRomFromFile(romFile, addToMru: true))
+                return;
+        }
+
+        LoadGameRom();
+    }
+
     public void CloseCommand() => Application.Current.GetMainWindow().Close();
 
     public void SaveScreenshot()
     {
+        // todo - ensure frame is complete. (Dump actual screen frame buffer instead?)
         var prefix = SanitizeFileName(m_currentRomTitle);
         var defaultName = $"{prefix}.tga";
         var command = new FileSaveCommand("Save Screenshot", "TGA Files", ["*.tga"], defaultName);
         command.FileSelected += (_, info) => m_vdp.DumpFrame(info);
         command.Execute(null);
-    }
-
-    public void LoadBios(FileInfo biosFile)
-    {
-        if (biosFile == null)
-            throw new ArgumentNullException(nameof(biosFile));
-        if (!biosFile.Exists)
-        {
-            Logger.Instance.Warn($"BIOS file '{biosFile.FullName}' was not found.");
-            return;
-        }
-
-        var biosData = biosFile.ReadAllBytes();
-        if (biosData.Length > 0x4000)
-        {
-            SmsRomChecksum.TryPatchChecksum(biosData, patchBothFields: true);
-            var romDevice = new SmsRomDevice(biosData);
-            var mapper = new SmsMapperDevice(m_memoryController, m_cpu.MainMemory);
-            m_cpu.Bus.Attach(mapper);
-            m_cpu.Bus.Attach(new SmsMapperMirrorDevice(mapper));
-            m_memoryController.SetCartridge(romDevice, forceEnabled: false);
-            m_memoryController.SetBiosRom(romDevice);
-            m_memoryController.Reset();
-            SetPaused(false);
-            LogRomInfo(biosFile, biosData, romDevice.BankCount);
-            StartCpuIfNeeded();
-            return;
-        }
-
-        m_memoryController.SetBios(biosData);
-        m_memoryController.Reset();
-        SetPaused(false);
-        LogRomInfo(biosFile, biosData, bankCount: 1);
-        StartCpuIfNeeded();
-    }
-
-    public void TryLoadLastRom()
-    {
-        if (string.IsNullOrWhiteSpace(Settings.LastRomPath))
-            return;
-
-        var romFile = new FileInfo(Settings.LastRomPath);
-        if (!romFile.Exists)
-            return;
-
-        LoadRomFromFile(romFile, addToMru: true);
     }
 
     private static void LogRomInfo(FileInfo romFile, byte[] romData, int bankCount)
@@ -371,21 +338,21 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         m_vdp.AreSpritesVisible = Settings.AreSpritesVisible;
     }
 
-    internal void LoadRomFromFile(FileInfo romFile, bool addToMru)
+    internal bool LoadRomFromFile(FileInfo romFile, bool addToMru)
     {
         if (romFile == null)
-            return;
+            return false;
         if (!romFile.Exists)
         {
             Logger.Instance.Warn($"Unable to load ROM '{romFile.FullName}': File not found.");
-            return;
+            return false;
         }
 
         var romData = ReadRomData(romFile, out var romName);
         if (romData == null || romData.Length == 0)
         {
             Logger.Instance.Warn($"Unable to load ROM '{romFile.FullName}': No valid ROM data found.");
-            return;
+            return false;
         }
 
         StopCpu();
@@ -394,18 +361,9 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         var mapper = new SmsMapperDevice(m_memoryController, m_cpu.MainMemory);
         m_cpu.Bus.Attach(mapper);
         m_cpu.Bus.Attach(new SmsMapperMirrorDevice(mapper));
+        m_memoryController.SetBios(null);
         m_memoryController.SetCartridge(romDevice, forceEnabled: false);
-
-        lock (m_cpuStepLock)
-        {
-            Array.Clear(m_cpu.MainMemory.Data, 0, m_cpu.MainMemory.Data.Length);
-            m_cpu.Reset();
-            m_vdp.Reset();
-            m_memoryController.Reset();
-            m_clockSync.Reset();
-            m_lastCpuTStates = 0;
-        }
-        SetPaused(false);
+        InitializePostRomState(romDevice);
 
         if (addToMru)
             Mru.Add(romFile);
@@ -415,6 +373,48 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         WindowTitle = $"MasterG33k - {m_currentRomTitle}";
         StartCpuIfNeeded();
         LogRomInfo(romFile, romData, romDevice.BankCount);
+        return true;
+    }
+
+    private void InitializePostRomState(SmsRomDevice romDevice)
+    {
+        if (romDevice == null)
+            throw new ArgumentNullException(nameof(romDevice));
+
+        lock (m_cpuStepLock)
+        {
+            Array.Clear(m_cpu.MainMemory.Data, 0, m_cpu.MainMemory.Data.Length);
+            m_cpu.Reset();
+            m_vdp.ApplyPostBiosState();
+            m_memoryController.Reset();
+
+            // Post-BIOS slot state: BIOS disabled, cartridge/RAM/IO enabled, expansion/card disabled.
+            m_memoryController.WriteControl(0xA8);
+
+            // BIOS stores the last port $3E value at $C000; some titles read it back on boot.
+            m_cpu.MainMemory.Data[0xC000] = 0xA8;
+            m_cpu.Bus.Write8(0xFFFC, romDevice.Control);
+            m_cpu.Bus.Write8(0xFFFD, romDevice.Bank0);
+            m_cpu.Bus.Write8(0xFFFE, romDevice.Bank1);
+            m_cpu.Bus.Write8(0xFFFF, romDevice.Bank2);
+
+            m_cpu.Reg.PC = 0x0000;
+            m_cpu.Reg.SP = 0xDFF0;
+            m_cpu.Reg.AF = 0x0000;
+            m_cpu.Reg.BC = 0x0000;
+            m_cpu.Reg.DE = 0x0000;
+            m_cpu.Reg.HL = 0x0000;
+            m_cpu.Reg.IX = 0x0000;
+            m_cpu.Reg.IY = 0x0000;
+            m_cpu.Reg.IM = 1;
+            m_cpu.Reg.IFF1 = false;
+            m_cpu.Reg.IFF2 = false;
+
+            m_clockSync.Reset();
+            m_lastCpuTStates = 0;
+        }
+
+        SetPaused(false);
     }
 
     private void SetPaused(bool isPaused)

@@ -115,6 +115,27 @@ public sealed class SmsVdp
         m_warnedMode4WithoutMode2 = false;
     }
 
+    public void ApplyPostBiosState()
+    {
+        Reset();
+
+        // Post-BIOS defaults expected by most Master System titles.
+        m_registers[0] = 0x36;
+        m_registers[1] = 0xA0;
+        m_registers[2] = 0xFF;
+        m_registers[3] = 0xFF;
+        m_registers[4] = 0xFF;
+        m_registers[5] = 0xFF;
+        m_registers[6] = 0xFB;
+        m_registers[7] = 0x00;
+        m_registers[8] = 0x00;
+        m_registers[9] = 0x00;
+        m_registers[10] = 0xFF;
+        m_lineCounter = m_registers[10];
+
+        MonitorVdpMode();
+    }
+
     public void AdvanceCycles(long tStates)
     {
         m_cycleAccumulator += (int)tStates;
@@ -547,6 +568,7 @@ public sealed class SmsVdp
     /// </summary>
     public void DumpSpriteTileMap(FileInfo tgaFile)
     {
+        // todo - remove this functionality
         if (tgaFile == null)
             throw new ArgumentNullException(nameof(tgaFile));
 
@@ -599,6 +621,7 @@ public sealed class SmsVdp
         TgaWriter.Write(tgaFile, rgba, width, height, 4);
     }
 
+    // todo - remove
     public void DumpBackgroundTileMapWithTiles(FileInfo outputFile)
     {
         if (outputFile == null)
@@ -686,6 +709,7 @@ public sealed class SmsVdp
         }
     }
 
+    // todo - remove
     private string BuildBackgroundSummaryJson(int nameTableBase, int patternBase, int alternatePatternBase, int scrollX, int scrollY)
     {
         var registers = string.Join(", ", m_registers.Select(value => $"\"0x{value:X2}\""));
@@ -852,6 +876,7 @@ public sealed class SmsVdp
         TgaWriter.Write(tgaFile, rgba, tileSize, tileSize, 4);
     }
 
+    // todo - Store as RGB. Update CrtFrameBuffer to use RGB.
     private static byte[] ConvertBgraToRgba(byte[] buffer)
     {
         var converted = new byte[buffer.Length];
