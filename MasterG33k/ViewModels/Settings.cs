@@ -21,6 +21,7 @@ public class Settings : UserSettingsBase
     protected override void ApplyDefaults()
     {
         IsSoundEnabled = true;
+        IsHardwareLowPassFilterEnabled = true;
         IsAmbientBlurred = true;
         IsBackgroundVisible = true;
         AreSpritesVisible = true;
@@ -31,6 +32,12 @@ public class Settings : UserSettingsBase
     }
 
     public bool IsSoundEnabled
+    {
+        get => Get<bool>();
+        set => Set(value);
+    }
+
+    public bool IsHardwareLowPassFilterEnabled
     {
         get => Get<bool>();
         set => Set(value);

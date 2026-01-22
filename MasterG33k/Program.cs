@@ -7,10 +7,10 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
-using Avalonia;
 using System;
-using MasterG33k.Views;
+using Avalonia;
 using JetBrains.Annotations;
+using MasterG33k.Views;
 
 namespace MasterG33k;
 

@@ -19,20 +19,23 @@ using Avalonia;
 using Avalonia.Media;
 using Avalonia.Threading;
 using DTC.Core;
-using DTC.Core.Image;
 using DTC.Core.Commands;
 using DTC.Core.Extensions;
+using DTC.Core.Image;
 using DTC.Core.Recording;
 using DTC.Core.UI;
 using DTC.Core.ViewModels;
 using DTC.Z80;
 using DTC.Z80.Devices;
+using DTC.Z80.HostDevices;
 
 namespace MasterG33k.ViewModels;
 
 public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 {
     private const int PauseRefreshIntervalMs = 33;
+    private const int AudioSampleRateHz = 44100;
+    private const short RecordingAudioChannels = 2;
     private string m_windowTitle;
     private bool m_isSoundChannel1Enabled = true;
     private bool m_isSoundChannel2Enabled = true;
@@ -50,6 +53,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private volatile bool m_isCpuPaused;
     private readonly ClockSync m_clockSync;
     private readonly LcdScreen m_screen;
+    private readonly SoundDevice m_audioSink;
+    private readonly SmsPsg m_psg;
     private volatile bool m_isPaused;
     private long m_lastCpuTStates;
     private uint m_lastFrameChecksum;
@@ -57,6 +62,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool m_hasFrameChecksum;
     private volatile byte[] m_lastFrameBuffer;
     private RecordingSession m_recordingSession;
+    private IAudioSampleSink m_recordingAudioSink;
     private DispatcherTimer m_recordingIndicatorTimer;
     private bool m_isRecordingIndicatorOn;
 
@@ -141,7 +147,9 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         m_vdp.FrameRendered += OnFrameRendered;
         m_joypad = new SmsJoypad();
         m_memoryController = new SmsMemoryController();
-        var portDevice = new SmsPortDevice(m_vdp, m_joypad, m_memoryController);
+        m_audioSink = new SoundDevice(AudioSampleRateHz);
+        m_psg = new SmsPsg(m_audioSink, (int)GetEffectiveCpuHz());
+        var portDevice = new SmsPortDevice(m_vdp, m_joypad, m_memoryController, psg: m_psg);
         m_joypad.PausePressed += (_, _) =>
         {
             ToggleCpuPause();
@@ -152,7 +160,10 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         m_clockSync = new ClockSync(GetEffectiveCpuHz, () => m_cpu.TStatesSinceCpuStart, () => m_cpu.Reset());
         Settings.PropertyChanged += OnSettingsPropertyChanged;
         IsCpuHistoryTracked = Settings.IsCpuHistoryTracked;
+        ApplySoundEnabledSetting();
+        ApplyHardwareLowPassFilterSetting();
         ApplyLayerVisibility();
+        ApplySoundChannelSettings();
 #if DEBUG
         m_cpu.InstructionLogger.IsEnabled = IsCpuHistoryTracked;
 #endif
@@ -178,13 +189,35 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         Settings.AreSpritesVisible = !Settings.AreSpritesVisible;
     }
 
-    public void ToggleSoundChannel1() => IsSoundChannel1Enabled = !IsSoundChannel1Enabled;
+    public void ToggleHardwareLowPassFilter()
+    {
+        Settings.IsHardwareLowPassFilterEnabled = !Settings.IsHardwareLowPassFilterEnabled;
+        ApplyHardwareLowPassFilterSetting();
+    }
 
-    public void ToggleSoundChannel2() => IsSoundChannel2Enabled = !IsSoundChannel2Enabled;
+    public void ToggleSoundChannel1()
+    {
+        IsSoundChannel1Enabled = !IsSoundChannel1Enabled;
+        m_psg.SetChannelEnabled(1, IsSoundChannel1Enabled);
+    }
 
-    public void ToggleSoundChannel3() => IsSoundChannel3Enabled = !IsSoundChannel3Enabled;
+    public void ToggleSoundChannel2()
+    {
+        IsSoundChannel2Enabled = !IsSoundChannel2Enabled;
+        m_psg.SetChannelEnabled(2, IsSoundChannel2Enabled);
+    }
 
-    public void ToggleSoundChannel4() => IsSoundChannel4Enabled = !IsSoundChannel4Enabled;
+    public void ToggleSoundChannel3()
+    {
+        IsSoundChannel3Enabled = !IsSoundChannel3Enabled;
+        m_psg.SetChannelEnabled(3, IsSoundChannel3Enabled);
+    }
+
+    public void ToggleSoundChannel4()
+    {
+        IsSoundChannel4Enabled = !IsSoundChannel4Enabled;
+        m_psg.SetChannelEnabled(4, IsSoundChannel4Enabled);
+    }
 
     public void ToggleRecording()
     {
@@ -210,8 +243,11 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         try
         {
             m_recordingSession?.Dispose();
-            m_recordingSession = new RecordingSession(m_screen.Display, GetVideoFrameRate());
+            var audioSettings = new RecordingAudioSettings(AudioSampleRateHz, RecordingAudioChannels);
+            m_recordingSession = new RecordingSession(m_screen.Display, GetVideoFrameRate(), audioSettings);
             m_recordingSession.Start();
+            m_recordingAudioSink = new RecordingAudioSink(m_recordingSession);
+            m_audioSink.CaptureSink = m_recordingAudioSink;
             StartRecordingIndicator();
             OnPropertyChanged(nameof(IsRecording));
         }
@@ -219,6 +255,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         {
             m_recordingSession?.Dispose();
             m_recordingSession = null;
+            m_recordingAudioSink = null;
+            m_audioSink.CaptureSink = null;
             StopRecordingIndicator();
             DialogService.Instance.ShowMessage(
                 "Unable to start recording",
@@ -233,6 +271,9 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         var session = m_recordingSession;
         m_recordingSession = null;
+        m_audioSink.FlushCapture();
+        m_audioSink.CaptureSink = null;
+        m_recordingAudioSink = null;
         StopRecordingIndicator();
         OnPropertyChanged(nameof(IsRecording));
 
@@ -393,6 +434,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             m_cpu.Reset();
             m_vdp.Reset();
             m_memoryController.Reset();
+            m_psg.Reset();
             m_clockSync.Reset();
             m_lastCpuTStates = 0;
         }
@@ -425,7 +467,15 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private void OnSettingsPropertyChanged(object sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(Settings.IsSoundEnabled))
+        {
+            ApplySoundEnabledSetting();
             return;
+        }
+        if (e.PropertyName == nameof(Settings.IsHardwareLowPassFilterEnabled))
+        {
+            ApplyHardwareLowPassFilterSetting();
+            return;
+        }
         if (e.PropertyName == nameof(Settings.IsCrtEmulationEnabled))
         {
             m_screen.FrameBuffer.IsCrt = Settings.IsCrtEmulationEnabled;
@@ -447,6 +497,20 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     {
         m_vdp.IsBackgroundVisible = Settings.IsBackgroundVisible;
         m_vdp.AreSpritesVisible = Settings.AreSpritesVisible;
+    }
+
+    private void ApplySoundEnabledSetting() =>
+        m_audioSink.SetEnabled(Settings.IsSoundEnabled);
+
+    private void ApplyHardwareLowPassFilterSetting() =>
+        m_audioSink.SetLowPassFilterEnabled(Settings.IsHardwareLowPassFilterEnabled);
+
+    private void ApplySoundChannelSettings()
+    {
+        m_psg.SetChannelEnabled(1, IsSoundChannel1Enabled);
+        m_psg.SetChannelEnabled(2, IsSoundChannel2Enabled);
+        m_psg.SetChannelEnabled(3, IsSoundChannel3Enabled);
+        m_psg.SetChannelEnabled(4, IsSoundChannel4Enabled);
     }
 
     internal bool LoadRomFromFile(FileInfo romFile, bool addToMru)
@@ -497,6 +561,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             m_cpu.Reset();
             m_vdp.ApplyPostBiosState();
             m_memoryController.Reset();
+            m_psg.Reset();
 
             // Post-BIOS slot state: BIOS disabled, cartridge/RAM/IO enabled, expansion/card disabled.
             m_memoryController.WriteControl(0xA8);
@@ -540,9 +605,13 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     {
         m_recordingSession?.Dispose();
         m_recordingSession = null;
+        m_audioSink.FlushCapture();
+        m_audioSink.CaptureSink = null;
+        m_recordingAudioSink = null;
         StopRecordingIndicator();
         StopCpu();
         m_joypad.Dispose();
+        m_audioSink.Dispose();
         m_screen.Dispose();
         Settings.MruFiles = Mru.AsString();
         Settings.PropertyChanged -= OnSettingsPropertyChanged;
@@ -556,6 +625,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         m_shutdownRequested = false;
         m_clockSync.Reset();
         m_lastCpuTStates = m_cpu.TStatesSinceCpuStart;
+        m_audioSink.Start();
         m_cpuThread = new Thread(RunCpuLoop)
         {
             Name = "MasterG33k CPU",
@@ -596,7 +666,10 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
                     var current = m_cpu.TStatesSinceCpuStart;
                     var delta = current - m_lastCpuTStates;
                     if (delta > 0)
+                    {
                         m_vdp.AdvanceCycles(delta);
+                        m_psg.AdvanceT(delta);
+                    }
                     m_lastCpuTStates = current;
                     if (m_vdp.TryConsumeInterrupt())
                         m_cpu.RequestInterrupt();
@@ -734,6 +807,19 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
 
         IsRecordingIndicatorOn = !IsRecordingIndicatorOn;
+    }
+
+    private sealed class RecordingAudioSink : IAudioSampleSink
+    {
+        private readonly RecordingSession m_session;
+
+        public RecordingAudioSink(RecordingSession session)
+        {
+            m_session = session ?? throw new ArgumentNullException(nameof(session));
+        }
+
+        public void OnSamples(ReadOnlySpan<short> samples, int sampleRate) =>
+            m_session.OnAudioSamples(samples, sampleRate);
     }
 
     private static byte[] ReadRomData(FileInfo romFile, out string romName)

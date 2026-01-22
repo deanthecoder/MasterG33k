@@ -107,28 +107,31 @@
                     </MenuItem>
 
                     <MenuItem Header="_Sound">
-                        <MenuItem Header="Channel 1 (Tone)" Command="{Binding ToggleSoundChannel1}"
-                                  IsEnabled="False">
+                        <MenuItem Header="Channel 1 (Tone)" Command="{Binding ToggleSoundChannel1}">
                             <MenuItem.Icon>
                                 <avalonia:MaterialIcon Kind="Tick" IsVisible="{Binding IsSoundChannel1Enabled}" />
                             </MenuItem.Icon>
                         </MenuItem>
-                        <MenuItem Header="Channel 2 (Tone)" Command="{Binding ToggleSoundChannel2}"
-                                  IsEnabled="False">
+                        <MenuItem Header="Channel 2 (Tone)" Command="{Binding ToggleSoundChannel2}">
                             <MenuItem.Icon>
                                 <avalonia:MaterialIcon Kind="Tick" IsVisible="{Binding IsSoundChannel2Enabled}" />
                             </MenuItem.Icon>
                         </MenuItem>
-                        <MenuItem Header="Channel 3 (Tone)" Command="{Binding ToggleSoundChannel3}"
-                                  IsEnabled="False">
+                        <MenuItem Header="Channel 3 (Tone)" Command="{Binding ToggleSoundChannel3}">
                             <MenuItem.Icon>
                                 <avalonia:MaterialIcon Kind="Tick" IsVisible="{Binding IsSoundChannel3Enabled}" />
                             </MenuItem.Icon>
                         </MenuItem>
-                        <MenuItem Header="Channel 4 (Noise)" Command="{Binding ToggleSoundChannel4}"
-                                  IsEnabled="False">
+                        <MenuItem Header="Channel 4 (Noise)" Command="{Binding ToggleSoundChannel4}">
                             <MenuItem.Icon>
                                 <avalonia:MaterialIcon Kind="Tick" IsVisible="{Binding IsSoundChannel4Enabled}" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <Separator />
+                        <MenuItem Header="Hardware-style Low-pass Filter" Command="{Binding ToggleHardwareLowPassFilter}">
+                            <MenuItem.Icon>
+                                <avalonia:MaterialIcon Kind="Tick"
+                                                       IsVisible="{Binding Settings.IsHardwareLowPassFilterEnabled}" />
                             </MenuItem.Icon>
                         </MenuItem>
                     </MenuItem>
@@ -165,8 +168,7 @@
                     </StackPanel.Styles>
                     
                     <ToggleButton IsChecked="{Binding Settings.IsSoundEnabled}"
-                                  ToolTip.Tip="Sound (not yet implemented)"
-                                  IsEnabled="False">
+                                  ToolTip.Tip="Sound">
                         <avalonia:MaterialIcon Width="24" Height="24"
                                                Tag="{Binding IsChecked, RelativeSource={RelativeSource AncestorType=ToggleButton}}">
                             <avalonia:MaterialIcon.Styles>

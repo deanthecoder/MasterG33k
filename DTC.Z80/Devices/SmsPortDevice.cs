@@ -23,14 +23,16 @@ public sealed class SmsPortDevice : IPortDevice
     private readonly SmsJoypad m_joypad;
     private readonly SmsMemoryController m_memoryController;
     private readonly IPortDevice m_fallback;
+    private readonly SmsPsg m_psg;
     private byte m_ioControl;
 
-    public SmsPortDevice(SmsVdp vdp, SmsJoypad joypad = null, SmsMemoryController memoryController = null, IPortDevice fallback = null)
+    public SmsPortDevice(SmsVdp vdp, SmsJoypad joypad = null, SmsMemoryController memoryController = null, IPortDevice fallback = null, SmsPsg psg = null)
     {
         m_vdp = vdp ?? throw new ArgumentNullException(nameof(vdp));
         m_joypad = joypad;
         m_memoryController = memoryController;
         m_fallback = fallback ?? DefaultPortDevice.Instance;
+        m_psg = psg;
     }
 
     public byte Read8(ushort portAddress)
@@ -91,6 +93,10 @@ public sealed class SmsPortDevice : IPortDevice
             case 0xDC:
             case 0xDD:
                 return; // Write-protected joypad ports.
+            case 0x7E:
+            case 0x7F:
+                m_psg?.Write(value);
+                return;
             default:
                 m_fallback.Write8(portAddress, value);
                 return;

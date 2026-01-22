@@ -13,8 +13,8 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Threading;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using DTC.Core;
 using MasterG33k.ViewModels;
 
