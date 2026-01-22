@@ -10,6 +10,7 @@ Avoid unnecessary token use; prefer referencing this document instead of re-pars
 - Match the English style as reported below.
 - Prefer existing frameworks, tests, and naming conventions shown here.
 - Check Supported UI Languages when adding UI strings so required translations stay in sync.
+- Use the `ripgrep` tool for efficient code searching, if available.
 ## Repositories (3)
 > **Agent note:** Sub-modules and sibling repositories often expose reusable libraries (e.g., extension methods, utilities). Cross-reference these before re-implementing.
 
@@ -23,7 +24,7 @@ Avoid unnecessary token use; prefer referencing this document instead of re-pars
 > **Agent note:** Match the project’s English style for identifiers, comments, and documentation.
 > **Agent note:** Use the dominant language(s) and idioms when proposing code.
 
-* Files      : 129
+* Files      : 170
 * Languages  : C# (99%)
 * English    : American English
 ## Largest Source Files (8)
@@ -32,24 +33,27 @@ Avoid unnecessary token use; prefer referencing this document instead of re-pars
 * 46.82 KB     : `DTC.Z80/Instructions/Instructions.cs`
 * 30.00 KB     : `Installer/pack.py`
 * 29.00 KB     : `DTC.Z80/Alu.cs`
-* 24.01 KB     : `DTC.Z80/Devices/SmsVdp.cs`
-* 16.63 KB     : `MasterG33k/ViewModels/MainWindowViewModel.cs`
-* 16.17 KB     : `DTC.Z80/Instructions/EdInstructions.cs`
-* 15.86 KB     : `DTC.Core/CSharp.Core/Views/ShaderControl.cs`
-* 9.78 KB      : `UnitTests/BiosBootTests.cs`
-## NuGet (12)
+* 24.99 KB     : `DTC.Z80/Devices/SmsVdp.cs`
+* 23.63 KB     : `MasterG33k/ViewModels/MainWindowViewModel.cs`
+* 17.37 KB     : `DTC.Core/DTC.Core/UI/ShaderControl.cs`
+* 16.16 KB     : `DTC.Z80/Instructions/EdInstructions.cs`
+* 15.61 KB     : `DTC.Core/DTC.Core/Extensions/FastLinq.cs`
+## NuGet (15)
 > **Agent note:** Prefer solutions using the listed packages and frameworks; avoid introducing new technologies without justification.
 
 * `Avalonia               ` : Avalonia is a cross-platform UI framework for .NET providing a flexible styling system and supporting a wide range of Operating Systems such as Windows, Linux, macOS and with experimental support for Android, iOS and WebAssembly.
 * `coverlet.collector     ` : Coverlet is a cross platform code coverage library for .NET, with support for line, branch and method coverage.
 * `DialogHost.Avalonia    ` : Avalonia Dialog Host control that provides a simple way to display a dialog with information or prompt the user when information is required
+* `DotnetNoise            ` : FastNoise is an open source noise generation library with a large collection of different noise algorithms. This library has been designed for realtime usage from the ground up, so has been optimised for speed without sacrificing noise quality.
 * `JetBrains.Annotations  ` : JetBrains.Annotations help reduce false positive warnings, explicitly declare purity and nullability in your code, deal with implicit usages of members, support special semantics of APIs in ASP.NET and XAML frameworks and otherwise increase accuracy of JetBrains Rider and ReSharper code inspections.
 * `K4os.Compression.LZ4   ` : Port of LZ4 compression algorithm for .NET
+* `Markdig                ` : A fast, powerful, CommonMark compliant, extensible Markdown processor for .NET with 20+ builtin extensions (pipetables, footnotes, definition lists... etc.)
 * `Material.Avalonia      ` : This repository is a set of styles that will help you customize your application in an appropriate material design.
 * `Material.Icons.Avalonia` : Avalonia control for display material icons from Material.Icons
 * `Newtonsoft.Json        ` : Json.NET is a popular high-performance JSON framework for .NET
 * `NUnit                  ` : NUnit is a unit-testing framework for all .NET languages.
 * `NUnit3TestAdapter      ` : The NUnit3 TestAdapter for Visual Studio, all versions from 2012 and onwards, and DotNet (incl. .Net core), versions .net framework 4.6.2 or higher, .net core 3.1, .net 5 or higher.
+* `OpenCvSharp4           ` : OpenCV wrapper for .NET. Since this package includes only core managed libraries, another package of native bindings for your OS is required (OpenCvSharp4.runtime.*).
 * `SharpHook              ` : SharpHook provides a cross-platform global keyboard and mouse hook, event simulation, and text entry simulation for .NET.
 * `SkiaSharp              ` : SkiaSharp is a cross-platform 2D graphics API for .NET platforms based on Google's Skia Graphics Library.
 ## Preferences
@@ -69,12 +73,11 @@ Avoid unnecessary token use; prefer referencing this document instead of re-pars
 * `MasterG33k.csproj` (net9.0)
 * `UnitTests.csproj` (net9.0)
 ### Internal
-* `CSharp.Core.csproj` (net7.0) [refs:4]
+* `DTC.Core.csproj` (net8.0) [refs:2]
 * `DTC.Z80.csproj` (net9.0) [refs:2]
-## READMEs (4)
+## READMEs (3)
 > **Agent note:** READMEs often contain background, design intent, and setup steps; consult them when modifying code or documentation.
 
 * `DTC.Core/README.md`
 * `Installer/README.md`
-* `MasterG33k/BIOS/README.md`
 * `README.md`
