@@ -156,5 +156,5 @@ public sealed class SmsPortDevice : IPortDevice
         return value;
     }
 
-    private byte ReadJoypadPortB() => 0xFF;
+    private static byte ReadJoypadPortB() => 0xFF;
 }

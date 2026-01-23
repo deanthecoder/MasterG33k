@@ -144,9 +144,7 @@ public static class Disassembler
             return 1;
         if (mnemonic.Contains("nn", StringComparison.Ordinal))
             return Is8BitImmediate(mnemonic) ? 1 : 2;
-        if (mnemonic.Contains("n", StringComparison.Ordinal))
-            return 1;
-        return 0;
+        return mnemonic.Contains('n', StringComparison.Ordinal) ? 1 : 0;
     }
 
     private static bool IsRelativeMnemonic(string mnemonic) =>

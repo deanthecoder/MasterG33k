@@ -25,7 +25,7 @@ public sealed class SmsMemoryController : IMemDevice
     public void Reset()
     {
         // Power-on defaults: BIOS, RAM and IO enabled; expansion/card/cartridge disabled.
-        Control = (byte)((m_bios == null && BiosRom == null) ? 0x00 : 0xE0);
+        Control = (byte)(m_bios == null && BiosRom == null ? 0x00 : 0xE0);
         if (m_forceCartridgeEnabled)
             Control = (byte)(Control & ~0x40);
     }
@@ -85,24 +85,7 @@ public sealed class SmsMemoryController : IMemDevice
 
     public bool IsRamEnabled => (Control & 0x10) == 0;
 
-    public bool IsIoEnabled => (Control & 0x04) == 0;
-
-    public string GetDebugSummary() =>
-        $"0x{Control:X2} BIOS={(IsBiosEnabled ? "on" : "off")} CART={(IsCartridgeEnabled ? "on" : "off")} RAM={(IsRamEnabled ? "on" : "off")} IO={(IsIoEnabled ? "on" : "off")} BIOSSize={GetBiosSize()} Vec38={GetBiosVectorByte():X2}";
-
     public SmsRomDevice BiosRom { get; private set; }
 
     public SmsRomDevice Cartridge { get; private set; }
-
-    private byte GetBiosVectorByte()
-    {
-        if (BiosRom != null)
-            return BiosRom.Read8(0x0038);
-        if (m_bios == null || m_bios.Length <= 0x38)
-            return 0xFF;
-
-        return m_bios[0x38];
-    }
-
-    private int GetBiosSize() => BiosRom?.RomSize ?? m_bios?.Length ?? 0;
 }

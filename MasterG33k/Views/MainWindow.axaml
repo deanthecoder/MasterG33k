@@ -73,6 +73,19 @@
                     </MenuItem>
 
                     <MenuItem Header="_Emulation">
+                        <MenuItem Header="Video Standard">
+                            <MenuItem Header="NTSC (60Hz)" Command="{Binding SetVideoStandardNtsc}">
+                                <MenuItem.Icon>
+                                    <avalonia:MaterialIcon Kind="Tick" IsVisible="{Binding IsNtscEnabled}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="PAL (50Hz)" Command="{Binding SetVideoStandardPal}">
+                                <MenuItem.Icon>
+                                    <avalonia:MaterialIcon Kind="Tick" IsVisible="{Binding IsPalEnabled}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                        </MenuItem>
+                        <Separator />
                         <MenuItem Header="_Reset Console" Command="{Binding ResetDevice}"
                                   InputGesture="{OnPlatform 'ctrl+r', macOS='⌘+r'}" />
                     </MenuItem>

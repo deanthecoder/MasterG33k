@@ -72,15 +72,14 @@ public sealed class ZexDocTests : TestsBase
                     cpu.RequestInterrupt();
 
                 // Check if abort file still exists every 20 emulated seconds
-                if (current >= nextCheckTStates)
+                if (current < nextCheckTStates)
+                    continue;
+                if (!File.Exists(abortFilePath))
                 {
-                    if (!File.Exists(abortFilePath))
-                    {
-                        Console.WriteLine("Abort file deleted - stopping test.");
-                        break;
-                    }
-                    nextCheckTStates += checkIntervalTStates;
+                    Console.WriteLine("Abort file deleted - stopping test.");
+                    break;
                 }
+                nextCheckTStates += checkIntervalTStates;
             }
         }
         finally

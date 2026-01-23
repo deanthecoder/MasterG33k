@@ -22,6 +22,7 @@ public class Settings : UserSettingsBase
     {
         IsSoundEnabled = true;
         IsHardwareLowPassFilterEnabled = true;
+        IsPalEnabled = false;
         IsAmbientBlurred = true;
         IsBackgroundVisible = true;
         AreSpritesVisible = true;
@@ -38,6 +39,12 @@ public class Settings : UserSettingsBase
     }
 
     public bool IsHardwareLowPassFilterEnabled
+    {
+        get => Get<bool>();
+        set => Set(value);
+    }
+
+    public bool IsPalEnabled
     {
         get => Get<bool>();
         set => Set(value);

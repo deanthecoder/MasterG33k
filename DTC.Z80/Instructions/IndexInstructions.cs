@@ -86,10 +86,7 @@ public static class IndexInstructions
             return true;
         }
 
-        if (TryExecuteIndexedAlu(cpu, useIX, opcode))
-            return true;
-
-        return false;
+        return TryExecuteIndexedAlu(cpu, useIX, opcode);
     }
 
     private static ushort GetIndex(Cpu cpu, bool useIX) => useIX ? cpu.Reg.IX : cpu.Reg.IY;

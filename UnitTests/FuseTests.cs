@@ -37,7 +37,7 @@ public class FuseTests : TestsBase
         try
         {
             fuseTest.InitCpu(cpu);
-            Assert.That(fuseTest.Run(cpu, fuseResult.ExpectedPC), Is.True, "Test timed-out.");
+            Assert.That(FuseTest.Run(cpu, fuseResult.ExpectedPC), Is.True, "Test timed-out.");
 
             fuseResult.Verify(cpu);
         }

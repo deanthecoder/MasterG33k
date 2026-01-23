@@ -55,13 +55,12 @@ public sealed class IncrementingCounterDebugger : CpuDebuggerBase
 
         if (m_candidates.Count == 0)
         {
-            if (!m_reportedEmpty && !HasPendingCandidatesWaitingToArm())
-            {
-                const string message = "[Counter Detector] No incrementing candidates remain.";
-                cpu.InstructionLogger.Write(() => message);
-                Logger.Instance.Info(message);
-                m_reportedEmpty = true;
-            }
+            if (m_reportedEmpty || HasPendingCandidatesWaitingToArm())
+                return;
+            const string message = "[Counter Detector] No incrementing candidates remain.";
+            cpu.InstructionLogger.Write(() => message);
+            Logger.Instance.Info(message);
+            m_reportedEmpty = true;
             return;
         }
 
@@ -143,11 +142,10 @@ public sealed class IncrementingCounterDebugger : CpuDebuggerBase
         m_candidates.Remove(address);
         m_states.Remove(address);
 
-        if (m_singleCandidate == address)
-        {
-            m_reportedSingleCandidate = false;
-            m_singleCandidate = 0;
-        }
+        if (m_singleCandidate != address)
+            return;
+        m_reportedSingleCandidate = false;
+        m_singleCandidate = 0;
     }
 
     private void ScanArmedCandidates(Cpu cpu)
@@ -207,13 +205,12 @@ public sealed class IncrementingCounterDebugger : CpuDebuggerBase
         Logger.Instance.Info(message);
         LogCandidateCountChange(cpu);
 
-        if (!state.HasHitTarget && current == m_targetValue)
-        {
-            state.HasHitTarget = true;
-            var targetMessage = $"[Counter Detector] {address:X4} reached target {m_targetValue:X2}.";
-            cpu.InstructionLogger.Write(() => targetMessage);
-            Logger.Instance.Info(targetMessage);
-        }
+        if (state.HasHitTarget || current != m_targetValue)
+            return;
+        state.HasHitTarget = true;
+        var targetMessage = $"[Counter Detector] {address:X4} reached target {m_targetValue:X2}.";
+        cpu.InstructionLogger.Write(() => targetMessage);
+        Logger.Instance.Info(targetMessage);
     }
 
     private void LogCandidateCountChange(Cpu cpu)

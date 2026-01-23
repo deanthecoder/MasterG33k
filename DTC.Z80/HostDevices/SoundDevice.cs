@@ -92,14 +92,10 @@ public class SoundDevice
         m_highPassAlpha = ComputeHighPassAlpha(HighPassCutoffHz, m_sampleRate);
     }
 
-    public IAudioSampleSink CaptureSink
+    public void SetCaptureSink(IAudioSampleSink value)
     {
-        get => m_captureSink;
-        set
-        {
-            m_captureSink = value;
-            m_captureBufferIndex = 0;
-        }
+        m_captureSink = value;
+        m_captureBufferIndex = 0;
     }
 
     public void Start()

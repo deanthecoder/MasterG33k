@@ -75,23 +75,18 @@ public sealed class SmsJoypad : IDisposable
         if (!m_handlePressEvents)
             return;
 
-        // Console Pause. Fire on key press only.
-        if (keyCode == KeyCode.VcP && isPressed)
+        switch (keyCode)
         {
-            PausePressed?.Invoke(this, EventArgs.Empty);
-            return;
-        }
-
-        if (keyCode == KeyCode.VcA)
-        {
-            SetAutoFireHeld(SmsJoypadButtons.Button1, isPressed);
-            return;
-        }
-
-        if (keyCode == KeyCode.VcS)
-        {
-            SetAutoFireHeld(SmsJoypadButtons.Button2, isPressed);
-            return;
+            // Console Pause. Fire on key press only.
+            case KeyCode.VcP when isPressed:
+                PausePressed?.Invoke(this, EventArgs.Empty);
+                return;
+            case KeyCode.VcA:
+                SetAutoFireHeld(SmsJoypadButtons.Button1, isPressed);
+                return;
+            case KeyCode.VcS:
+                SetAutoFireHeld(SmsJoypadButtons.Button2, isPressed);
+                return;
         }
 
         if (!TryMapButton(keyCode, out var button))

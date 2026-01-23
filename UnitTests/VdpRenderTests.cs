@@ -111,7 +111,6 @@ public sealed class VdpRenderTests
     private static byte[] RenderFrame(SmsVdp vdp)
     {
         byte[] frame = null;
-        void Handler(object sender, byte[] buffer) => frame = buffer.ToArray();
 
         vdp.FrameRendered += Handler;
         vdp.AdvanceCycles(192 * 228);
@@ -120,5 +119,7 @@ public sealed class VdpRenderTests
         Assert.That(frame, Is.Not.Null);
         Assert.That(frame, Has.Length.EqualTo(SmsVdp.FrameWidth * SmsVdp.FrameHeight * 4));
         return frame;
+
+        void Handler(object sender, byte[] buffer) => frame = buffer.ToArray();
     }
 }

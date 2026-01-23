@@ -12,7 +12,7 @@ using DTC.Z80.HostDevices;
 namespace DTC.Z80.Devices;
 
 /// <summary>
-/// SN76489 PSG (SMS/GG).
+/// Sound chip: SN76489 PSG (SMS/GG).
 /// </summary>
 public sealed class SmsPsg
 {
@@ -35,9 +35,9 @@ public sealed class SmsPsg
     private readonly int[] m_outputChannel = new int[4];
     private readonly bool[] m_channelEnabled = [true, true, true, true];
     private readonly SoundDevice m_audioSink;
-    private readonly int m_cpuClockHz;
+    private int m_cpuClockHz;
     private readonly int m_sampleRate;
-    private readonly double m_ticksPerSample;
+    private double m_ticksPerSample;
     private int m_clock;
     private int m_clockFrac;
     private int m_regLatch;
@@ -53,8 +53,6 @@ public sealed class SmsPsg
         m_ticksPerSample = (double)m_cpuClockHz / m_sampleRate;
         Reset();
     }
-
-    public int SampleRateHz => m_sampleRate;
 
     public void Reset()
     {
@@ -86,6 +84,18 @@ public sealed class SmsPsg
             return;
 
         m_channelEnabled[channel - 1] = isEnabled;
+    }
+
+    public void SetCpuClockHz(int cpuClockHz)
+    {
+        if (m_cpuClockHz == cpuClockHz || cpuClockHz <= 0)
+            return;
+
+        m_cpuClockHz = cpuClockHz;
+        m_ticksPerSample = (double)m_cpuClockHz / m_sampleRate;
+        m_clock = (m_cpuClockHz << Scale) / 16 / m_sampleRate;
+        if (m_ticksUntilSample > m_ticksPerSample)
+            m_ticksUntilSample = m_ticksPerSample;
     }
 
     public void Write(byte value)
@@ -192,7 +202,7 @@ public sealed class SmsPsg
                 var tone = m_reg[i << 1];
                 if (tone > 6)
                 {
-                    var numerator = (clockCyclesScaled - m_clockFrac + (2 << Scale) * counter);
+                    var numerator = clockCyclesScaled - m_clockFrac + (2 << Scale) * counter;
                     var position = (int)(((long)numerator << Scale) * m_freqPolarity[i] / (clockCyclesScaled + m_clockFrac));
                     m_freqPos[i] = position;
                     m_freqPolarity[i] = -m_freqPolarity[i];
@@ -211,29 +221,27 @@ public sealed class SmsPsg
             }
         }
 
-        if (m_freqCounter[3] <= 0)
+        if (m_freqCounter[3] > 0)
+            return;
+        m_freqPolarity[3] = -m_freqPolarity[3];
+
+        if (m_noiseFreq != 0x80)
+            m_freqCounter[3] += m_noiseFreq * (clockCycles / m_noiseFreq + 1);
+
+        if (m_freqPolarity[3] != 1)
+            return;
+        int feedback;
+        if ((m_reg[6] & 0x04) != 0)
         {
-            m_freqPolarity[3] = -m_freqPolarity[3];
-
-            if (m_noiseFreq != 0x80)
-                m_freqCounter[3] += m_noiseFreq * (clockCycles / m_noiseFreq + 1);
-
-            if (m_freqPolarity[3] == 1)
-            {
-                int feedback;
-                if ((m_reg[6] & 0x04) != 0)
-                {
-                    var pattern = m_noiseShiftReg & FeedbackPattern;
-                    feedback = pattern != 0 && (pattern ^ FeedbackPattern) != 0 ? 1 : 0;
-                }
-                else
-                {
-                    feedback = m_noiseShiftReg & 1;
-                }
-
-                m_noiseShiftReg = (m_noiseShiftReg >> 1) | (feedback << 15);
-            }
+            var pattern = m_noiseShiftReg & FeedbackPattern;
+            feedback = pattern != 0 && (pattern ^ FeedbackPattern) != 0 ? 1 : 0;
         }
+        else
+        {
+            feedback = m_noiseShiftReg & 1;
+        }
+
+        m_noiseShiftReg = (m_noiseShiftReg >> 1) | (feedback << 15);
     }
 
     private bool IsToneAboveNyquist(int toneRegister)

@@ -17,7 +17,7 @@ public sealed class InstructionLogger
     private readonly string[] m_log = new string[1024];
     private int m_index;
     private int m_count;
-    private readonly object m_lock = new();
+    private readonly Lock m_lock = new();
 
     public bool IsEnabled { get; set; }
 

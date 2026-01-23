@@ -10,7 +10,6 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 using System;
 using System.Reflection;
-using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using DTC.Core.UI;
@@ -28,7 +27,7 @@ internal static class AboutInfoProvider
         Icon = LoadIcon()
     };
 
-    private static IImage LoadIcon()
+    private static Bitmap LoadIcon()
     {
         using var stream = AssetLoader.Open(new Uri("avares://MasterG33k/Assets/app.ico"));
         return new Bitmap(stream);

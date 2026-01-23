@@ -65,6 +65,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private IAudioSampleSink m_recordingAudioSink;
     private DispatcherTimer m_recordingIndicatorTimer;
     private bool m_isRecordingIndicatorOn;
+    private bool m_hasLoggedVideoStandard;
+    private bool m_lastLoggedIsPal;
 
     public MruFiles Mru { get; }
     public IImage Display { get; }
@@ -121,6 +123,10 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         private set => SetField(ref m_isSoundChannel4Enabled, value);
     }
 
+    public bool IsPalEnabled => Settings.IsPalEnabled;
+
+    public bool IsNtscEnabled => !Settings.IsPalEnabled;
+
     public bool IsCpuHistoryTracked
     {
         get => m_isCpuHistoryTracked;
@@ -160,6 +166,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         m_clockSync = new ClockSync(GetEffectiveCpuHz, () => m_cpu.TStatesSinceCpuStart, () => m_cpu.Reset());
         Settings.PropertyChanged += OnSettingsPropertyChanged;
         IsCpuHistoryTracked = Settings.IsCpuHistoryTracked;
+        ApplyVideoStandardSetting();
         ApplySoundEnabledSetting();
         ApplyHardwareLowPassFilterSetting();
         ApplyLayerVisibility();
@@ -177,6 +184,24 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     public void ToggleCrtEmulation()
     {
         Settings.IsCrtEmulationEnabled = !Settings.IsCrtEmulationEnabled;
+    }
+
+    public void SetVideoStandardNtsc()
+    {
+        if (!Settings.IsPalEnabled)
+            return;
+
+        Settings.IsPalEnabled = false;
+        ApplyVideoStandardSetting();
+    }
+
+    public void SetVideoStandardPal()
+    {
+        if (Settings.IsPalEnabled)
+            return;
+
+        Settings.IsPalEnabled = true;
+        ApplyVideoStandardSetting();
     }
 
     public void ToggleBackgroundVisibility()
@@ -247,7 +272,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             m_recordingSession = new RecordingSession(m_screen.Display, GetVideoFrameRate(), audioSettings);
             m_recordingSession.Start();
             m_recordingAudioSink = new RecordingAudioSink(m_recordingSession);
-            m_audioSink.CaptureSink = m_recordingAudioSink;
+            m_audioSink.SetCaptureSink(m_recordingAudioSink);
             StartRecordingIndicator();
             OnPropertyChanged(nameof(IsRecording));
         }
@@ -256,7 +281,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             m_recordingSession?.Dispose();
             m_recordingSession = null;
             m_recordingAudioSink = null;
-            m_audioSink.CaptureSink = null;
+            m_audioSink.SetCaptureSink(null);
             StopRecordingIndicator();
             DialogService.Instance.ShowMessage(
                 "Unable to start recording",
@@ -272,7 +297,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         var session = m_recordingSession;
         m_recordingSession = null;
         m_audioSink.FlushCapture();
-        m_audioSink.CaptureSink = null;
+        m_audioSink.SetCaptureSink(null);
         m_recordingAudioSink = null;
         StopRecordingIndicator();
         OnPropertyChanged(nameof(IsRecording));
@@ -372,7 +397,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
                 return;
             }
 
-            var expectedSize = SmsVdp.FrameWidth * SmsVdp.FrameHeight * 4;
+            const int expectedSize = SmsVdp.FrameWidth * SmsVdp.FrameHeight * 4;
             if (frameBuffer.Length != expectedSize)
             {
                 Logger.Instance.Warn($"Screenshot aborted; expected {expectedSize} bytes but got {frameBuffer.Length}.");
@@ -466,30 +491,29 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void OnSettingsPropertyChanged(object sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(Settings.IsSoundEnabled))
+        switch (e.PropertyName)
         {
-            ApplySoundEnabledSetting();
-            return;
-        }
-        if (e.PropertyName == nameof(Settings.IsHardwareLowPassFilterEnabled))
-        {
-            ApplyHardwareLowPassFilterSetting();
-            return;
-        }
-        if (e.PropertyName == nameof(Settings.IsCrtEmulationEnabled))
-        {
-            m_screen.FrameBuffer.IsCrt = Settings.IsCrtEmulationEnabled;
-            return;
-        }
-        if (e.PropertyName == nameof(Settings.IsBackgroundVisible) ||
-            e.PropertyName == nameof(Settings.AreSpritesVisible))
-        {
-            ApplyLayerVisibility();
-            return;
-        }
-        if (e.PropertyName == nameof(Settings.IsCpuHistoryTracked))
-        {
-            IsCpuHistoryTracked = Settings.IsCpuHistoryTracked;
+            case nameof(Settings.IsSoundEnabled):
+                ApplySoundEnabledSetting();
+                return;
+            case nameof(Settings.IsHardwareLowPassFilterEnabled):
+                ApplyHardwareLowPassFilterSetting();
+                return;
+            case nameof(Settings.IsPalEnabled):
+                ApplyVideoStandardSetting();
+                OnPropertyChanged(nameof(IsPalEnabled));
+                OnPropertyChanged(nameof(IsNtscEnabled));
+                return;
+            case nameof(Settings.IsCrtEmulationEnabled):
+                m_screen.FrameBuffer.IsCrt = Settings.IsCrtEmulationEnabled;
+                return;
+            case nameof(Settings.IsBackgroundVisible):
+            case nameof(Settings.AreSpritesVisible):
+                ApplyLayerVisibility();
+                return;
+            case nameof(Settings.IsCpuHistoryTracked):
+                IsCpuHistoryTracked = Settings.IsCpuHistoryTracked;
+                break;
         }
     }
 
@@ -504,6 +528,21 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void ApplyHardwareLowPassFilterSetting() =>
         m_audioSink.SetLowPassFilterEnabled(Settings.IsHardwareLowPassFilterEnabled);
+
+    private void ApplyVideoStandardSetting()
+    {
+        m_vdp.SetIsPal(Settings.IsPalEnabled);
+        m_psg.SetCpuClockHz((int)GetEffectiveCpuHz());
+        m_clockSync.Resync();
+
+        var isPal = Settings.IsPalEnabled;
+        if (m_hasLoggedVideoStandard && m_lastLoggedIsPal == isPal)
+            return;
+        m_hasLoggedVideoStandard = true;
+        m_lastLoggedIsPal = isPal;
+        var label = isPal ? "PAL (50Hz)" : "NTSC (60Hz)";
+        Logger.Instance.Info($"Video standard: {label}");
+    }
 
     private void ApplySoundChannelSettings()
     {
@@ -606,7 +645,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         m_recordingSession?.Dispose();
         m_recordingSession = null;
         m_audioSink.FlushCapture();
-        m_audioSink.CaptureSink = null;
+        m_audioSink.SetCaptureSink(null);
         m_recordingAudioSink = null;
         StopRecordingIndicator();
         StopCpu();
@@ -709,11 +748,10 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         }
 
         SetPaused(isPaused);
-        if (frameBufferCopy != null)
-        {
-            m_screen.Update(frameBufferCopy);
-            DisplayUpdated?.Invoke(this, EventArgs.Empty);
-        }
+        if (frameBufferCopy == null)
+            return;
+        m_screen.Update(frameBufferCopy);
+        DisplayUpdated?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnFrameRendered(object sender, byte[] frameBuffer)
@@ -752,21 +790,21 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         DisplayUpdated?.Invoke(this, EventArgs.Empty);
     }
 
-    // Master System NTSC CPU clock; we always render 256x192.
-    private static double GetEffectiveCpuHz() =>
-        3_579_545;
+    // Master System CPU clock; we always render 256x192.
+    private double GetEffectiveCpuHz() =>
+        Settings.IsPalEnabled ? 3_546_895 : 3_579_545;
 
-    private static double GetVideoFrameRate() =>
-        GetEffectiveCpuHz() / (SmsVdp.CyclesPerScanline * SmsVdp.TotalScanlines);
+    private double GetVideoFrameRate() =>
+        GetEffectiveCpuHz() / (SmsVdp.CyclesPerScanline * m_vdp.TotalScanlines);
 
     private static uint ComputeFrameChecksum(byte[] frameBuffer)
     {
         const uint offsetBasis = 2166136261;
         const uint prime = 16777619;
         var hash = offsetBasis;
-        for (var i = 0; i < frameBuffer.Length; i++)
+        foreach (var b in frameBuffer)
         {
-            hash ^= frameBuffer[i];
+            hash ^= b;
             hash *= prime;
         }
 

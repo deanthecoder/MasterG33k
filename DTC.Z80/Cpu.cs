@@ -20,7 +20,7 @@ public sealed class Cpu
 {
     private bool m_interruptPending;
     private int m_eiDelay;
-    private readonly List<ICpuDebugger> m_debuggers = new();
+    private readonly List<ICpuDebugger> m_debuggers = [];
     private bool m_nmiPending;
 
     public Registers Reg { get; }
@@ -36,8 +36,7 @@ public sealed class Cpu
     public ushort CurrentInstructionAddress { get; private set; }
     
     // ReSharper disable InconsistentNaming
-    public long TStates { get; private set; }
-    public long TStatesSinceCpuStart => TStates;
+    public long TStatesSinceCpuStart { get; private set; }
 
     // ReSharper restore InconsistentNaming
     public Cpu(Bus bus)
@@ -55,7 +54,7 @@ public sealed class Cpu
     {
         TheRegisters.Clear();
         IsHalted = false;
-        TStates = 0;
+        TStatesSinceCpuStart = 0;
         m_eiDelay = 0;
     }
 
@@ -224,7 +223,7 @@ public sealed class Cpu
     /// Known waits: opcode fetch is 4T, memory read/write is 3T per byte.
     /// </summary>
     public void InternalWait(int tStates) =>
-        TStates += tStates;
+        TStatesSinceCpuStart += tStates;
 
     public void PushPC()
     {

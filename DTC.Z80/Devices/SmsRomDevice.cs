@@ -80,9 +80,7 @@ public sealed class SmsRomDevice : IMemDevice
     {
         if (addr <= 0x3FFF)
         {
-            if (addr < 0x0400)
-                return ReadBanked(0, addr);
-            return ReadBanked(m_bank0Mapped, addr);
+            return ReadBanked(addr < 0x0400 ? (byte)0 : m_bank0Mapped, addr);
         }
         if (addr <= 0x7FFF)
             return ReadBanked(m_bank1Mapped, addr - 0x4000);

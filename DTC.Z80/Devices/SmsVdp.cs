@@ -28,7 +28,8 @@ public sealed class SmsVdp
     private const int CramSize = 32;
     private const int RegisterCount = 16;
     public const int CyclesPerScanline = 228;
-    public const int TotalScanlines = 262;
+    private const int NtscTotalScanlines = 262;
+    private const int PalTotalScanlines = 313;
     private const int VblankStartLine = 192;
     private const byte StatusVblankBit = 0x80;
     private const byte StatusSpriteOverflowBit = 0x40;
@@ -72,12 +73,26 @@ public sealed class SmsVdp
     private bool m_warnedNonMode4;
     private bool m_warnedMode2;
     private bool m_warnedMode4WithoutMode2;
+    private bool m_isPal;
 
     public event EventHandler<byte[]> FrameRendered;
 
     public bool IsBackgroundVisible { get; set; } = true;
 
     public bool AreSpritesVisible { get; set; } = true;
+
+    public int TotalScanlines { get; private set; } = NtscTotalScanlines;
+
+    public void SetIsPal(bool isPal)
+    {
+        if (m_isPal == isPal)
+            return;
+
+        m_isPal = isPal;
+        TotalScanlines = isPal ? PalTotalScanlines : NtscTotalScanlines;
+        if (m_vCounter >= TotalScanlines)
+            m_vCounter = 0;
+    }
 
     public void Reset()
     {
@@ -218,11 +233,10 @@ public sealed class SmsVdp
             return;
         }
 
-        var high = value;
-        var command = (byte)(high >> 6);
+        var command = (byte)(value >> 6);
         if (command == 0b10)
         {
-            var regIndex = high & 0x0F;
+            var regIndex = value & 0x0F;
             if (regIndex < m_registers.Length)
             {
                 m_registers[regIndex] = m_controlLatchLow;
@@ -231,12 +245,12 @@ public sealed class SmsVdp
                 MonitorVdpMode();
             }
 
-            m_address = (ushort)((m_controlLatchLow | ((high & 0x3F) << 8)) & 0x3FFF);
+            m_address = (ushort)((m_controlLatchLow | ((value & 0x3F) << 8)) & 0x3FFF);
             m_accessMode = AccessMode.VramWrite;
         }
         else
         {
-            m_address = (ushort)((m_controlLatchLow | ((high & 0x3F) << 8)) & 0x3FFF);
+            m_address = (ushort)((m_controlLatchLow | ((value & 0x3F) << 8)) & 0x3FFF);
             m_accessMode = command switch
             {
                 0b00 => AccessMode.VramRead,
@@ -470,7 +484,7 @@ public sealed class SmsVdp
             {
                 // (2) Vertical scroll lock for rightmost 8 tile columns when enabled.
                 // Reference behaviour: columns 24-31 are not affected by vertical scroll.
-                var effectiveScrollY = (m_registers[0].IsBitSet(7) && x >= 192) ? (byte)0 : scrollY;
+                var effectiveScrollY = m_registers[0].IsBitSet(7) && x >= 192 ? (byte)0 : scrollY;
 
                 var sourceX = (x - scrollX) & 0xFF;
 

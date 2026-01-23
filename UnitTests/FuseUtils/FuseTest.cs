@@ -72,7 +72,7 @@ public class FuseTest
 
     public override string ToString() => TestId;
     
-    public bool Run(Cpu cpu, ushort expectedPc)
+    public static bool Run(Cpu cpu, ushort expectedPc)
     {
         var ticks = 0;
         do
