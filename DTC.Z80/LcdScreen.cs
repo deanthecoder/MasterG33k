@@ -22,6 +22,7 @@ public sealed class LcdScreen : IDisposable
 {
     public WriteableBitmap Display { get; }
     public CrtFrameBuffer FrameBuffer { get; }
+    private byte[] m_previousOutput;
 
     public LcdScreen(int width, int height)
     {
@@ -37,10 +38,15 @@ public sealed class LcdScreen : IDisposable
             throw new ArgumentNullException(nameof(frameBuffer));
 
         var output = FrameBuffer.Apply(frameBuffer);
+        var blended = output;
+        if (FrameBuffer.IsCrt)
+            blended = BlendWithPrevious(output);
+        else
+            CachePreviousOutput(output);
 
         using var fb = Display.Lock();
-        var length = Math.Min(output.Length, fb.RowBytes * fb.Size.Height);
-        Marshal.Copy(output, 0, fb.Address, length);
+        var length = Math.Min(blended.Length, fb.RowBytes * fb.Size.Height);
+        Marshal.Copy(blended, 0, fb.Address, length);
     }
 
     public void Dispose() => Display?.Dispose();
@@ -52,5 +58,33 @@ public sealed class LcdScreen : IDisposable
         for (var i = 3; i < bytes.Length; i += CrtFrameBuffer.BytesPerPixel)
             bytes[i] = 255; // Alpha channel is always opaque.
         Marshal.Copy(bytes, 0, fb.Address, bytes.Length);
+    }
+
+    private byte[] BlendWithPrevious(byte[] output)
+    {
+        if (output == null)
+            return null;
+
+        if (m_previousOutput == null || m_previousOutput.Length != output.Length)
+        {
+            m_previousOutput = new byte[output.Length];
+            Buffer.BlockCopy(output, 0, m_previousOutput, 0, output.Length);
+            return m_previousOutput;
+        }
+
+        for (var i = 0; i < output.Length; i++)
+            m_previousOutput[i] = (byte)((m_previousOutput[i] * 3 + output[i] * 2) / 5);
+
+        return m_previousOutput;
+    }
+
+    private void CachePreviousOutput(byte[] output)
+    {
+        if (output == null)
+            return;
+
+        if (m_previousOutput == null || m_previousOutput.Length != output.Length)
+            m_previousOutput = new byte[output.Length];
+        Buffer.BlockCopy(output, 0, m_previousOutput, 0, output.Length);
     }
 }
