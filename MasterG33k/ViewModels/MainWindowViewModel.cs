@@ -867,7 +867,10 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             return null;
 
         if (!romFile.Extension.Equals(".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            romName = Path.GetFileNameWithoutExtension(romName);
             return romFile.ReadAllBytes();
+        }
 
         using var archive = ZipFile.OpenRead(romFile.FullName);
         foreach (var entry in archive.Entries)
@@ -879,7 +882,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             using var stream = entry.Open();
             stream.ReadExactly(buffer.AsSpan());
 
-            romName = entry.Name;
+            romName = Path.GetFileNameWithoutExtension(entry.Name);
             return buffer;
         }
 
