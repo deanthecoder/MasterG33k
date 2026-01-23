@@ -108,6 +108,26 @@ public sealed class JoypadAndPortDeviceTests
         Assert.That(fallback.WriteCount, Is.Zero);
     }
 
+    [Test]
+    public void GivenAudioControlPortReadCheckReportsNoFmHardware()
+    {
+        var portDevice = new SmsPortDevice(new SmsVdp());
+
+        Assert.That(portDevice.Read8(0xF2), Is.EqualTo(0x02));
+    }
+
+    [Test]
+    public void GivenAudioControlPortWriteCheckNoFmSignaturePersists()
+    {
+        var portDevice = new SmsPortDevice(new SmsVdp());
+
+        portDevice.Write8(0xF2, 0x00);
+        Assert.That(portDevice.Read8(0xF2), Is.EqualTo(0x02));
+
+        portDevice.Write8(0xF2, 0x03);
+        Assert.That(portDevice.Read8(0xF2), Is.EqualTo(0x02));
+    }
+
     private sealed class TestPortDevice : IPortDevice
     {
         public int WriteCount { get; private set; }
