@@ -58,22 +58,26 @@
                             <Separator/>
                             <MenuItem Header="Clear" Command="{Binding Mru.Clear}"/>
                         </MenuItem>
-                        <MenuItem Header="_Save Snapshot..." Command="{Binding SaveSnapshot}"
-                                  InputGesture="{OnPlatform 'ctrl+s', macOS='⌘+s'}"
-                                  IsEnabled="False" />
-                        <MenuItem Header="Save _Screenshot..." Command="{Binding SaveScreenshot}" />
+                        <Separator />
+                        <MenuItem Header="Save _Screenshot..." Command="{Binding SaveScreenshot}"/>
                         <MenuItem Header="Start _Recording" Command="{Binding StartRecording}"
                                   InputGesture="{OnPlatform 'ctrl+m', macOS='⌘+m'}"
                                   IsVisible="{Binding !IsRecording}" />
                         <MenuItem Header="Stop _Recording..." Command="{Binding StopRecording}"
                                   InputGesture="{OnPlatform 'ctrl+m', macOS='⌘+m'}"
                                   IsVisible="{Binding IsRecording}" />
+                        <MenuItem Header="_Save Snapshot..." Command="{Binding SaveSnapshot}"
+                                  InputGesture="{OnPlatform 'ctrl+s', macOS='⌘+s'}"
+                                  IsEnabled="False" />
                         <Separator />
                         <MenuItem Header="_Exit" Command="{Binding CloseCommand}" />
                     </MenuItem>
 
                     <MenuItem Header="_Emulation">
-                        <MenuItem Header="Video Standard">
+                        <MenuItem Header="_Reset Console" Command="{Binding ResetDevice}"
+                                  InputGesture="{OnPlatform 'ctrl+r', macOS='⌘+r'}" />
+                        <Separator />
+                        <MenuItem Header="Timing">
                             <MenuItem Header="NTSC (60Hz)" Command="{Binding SetVideoStandardNtsc}">
                                 <MenuItem.Icon>
                                     <avalonia:MaterialIcon Kind="Tick" IsVisible="{Binding IsNtscEnabled}" />
@@ -85,9 +89,6 @@
                                 </MenuItem.Icon>
                             </MenuItem>
                         </MenuItem>
-                        <Separator />
-                        <MenuItem Header="_Reset Console" Command="{Binding ResetDevice}"
-                                  InputGesture="{OnPlatform 'ctrl+r', macOS='⌘+r'}" />
                     </MenuItem>
 
                     <MenuItem Header="_Display">
