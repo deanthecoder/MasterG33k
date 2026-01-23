@@ -471,10 +471,11 @@ public sealed class SmsVdp
             if (isLeftColumnBlanked && x < 8)
             {
                 // Force backdrop colour; BG pixel is treated as transparent for priority purposes.
+                var backdrop = DecodeBackdropColor();
                 var offset = (y * FrameWidth + x) * 4;
-                m_frameBuffer[offset] = r;
-                m_frameBuffer[offset + 1] = g;
-                m_frameBuffer[offset + 2] = b;
+                m_frameBuffer[offset] = backdrop.r;
+                m_frameBuffer[offset + 1] = backdrop.g;
+                m_frameBuffer[offset + 2] = backdrop.b;
                 m_frameBuffer[offset + 3] = 255;
                 m_bgPriority[(y * FrameWidth) + x] = 0;
                 continue;

@@ -82,6 +82,47 @@ public sealed class VdpRenderTests
         Assert.That(frame[3], Is.EqualTo(255));
     }
 
+    [Test]
+    public void GivenLeftColumnBlankingCheckBackdropColorIsUsed()
+    {
+        var vdp = new SmsVdp();
+        vdp.Reset();
+
+        // Mode 4 with display enabled; left column blanking enabled; backdrop index 1.
+        WriteRegister(vdp, 0, 0b0010_0100);
+        WriteRegister(vdp, 1, 0b0100_0000);
+        WriteRegister(vdp, 7, 0x01);
+
+        // Palette 0 entry 1 = red (value 0x03 -> R=255).
+        WriteCram(vdp, 1, 0x03);
+
+        // Backdrop colour (sprite palette index 1) = blue (value 0x30 -> B=255).
+        WriteCram(vdp, 16 + 1, 0x30);
+
+        // Make tile 0, row 0, all pixels non-zero (color index 1).
+        WriteVram(vdp, 0x0000, 0xFF);
+        WriteVram(vdp, 0x0001, 0x00);
+        WriteVram(vdp, 0x0002, 0x00);
+        WriteVram(vdp, 0x0003, 0x00);
+
+        // Name table entry 0 -> tile index 0, palette 0, no flags.
+        WriteVram(vdp, 0x3800, 0x00);
+        WriteVram(vdp, 0x3801, 0x00);
+
+        var frame = RenderFrame(vdp);
+
+        Assert.That(frame[0], Is.Zero);
+        Assert.That(frame[1], Is.Zero);
+        Assert.That(frame[2], Is.EqualTo(255));
+        Assert.That(frame[3], Is.EqualTo(255));
+
+        var x8 = 8 * 4;
+        Assert.That(frame[x8], Is.EqualTo(255));
+        Assert.That(frame[x8 + 1], Is.Zero);
+        Assert.That(frame[x8 + 2], Is.Zero);
+        Assert.That(frame[x8 + 3], Is.EqualTo(255));
+    }
+
     private static void WriteRegister(SmsVdp vdp, byte index, byte value)
     {
         vdp.WriteControl(value);
