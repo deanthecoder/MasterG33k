@@ -59,9 +59,13 @@ Global key hooks translate the following keys into the SMS joypad:
 - **Validation suite** – `UnitTests` target the Z80 core and VDP renderer via NUnit to catch regressions.
 
 ## Useful links
+- [Z80 CPU User Manual (UM0080)](https://www.zilog.com/docs/z80/um0080.pdf)
+- [CLR Home opcode tables](https://clrhome.org/table/)
+- [Codeslinger Master System project](http://www.codeslinger.co.uk/pages/projects/mastersystem.html)
 - [SMS Power! Development Wiki](https://www.smspower.org/Development)
 - [SMS Power! PSG documentation](https://www.smspower.org/Development/PSG)
 - [SMS Power! VDP documentation](https://www.smspower.org/Development/VDP)
+- [JavaGear (Zophar)](https://www.zophar.net/java/sms-gg/javagear.html)
 
 ## License
 Licensed under the MIT License. See [LICENSE](LICENSE) for details.

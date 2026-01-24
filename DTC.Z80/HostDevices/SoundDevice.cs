@@ -281,8 +281,8 @@ public class SoundDevice
             m_outputGain = Math.Min(targetGain, m_outputGain + m_gainStep);
         else if (m_outputGain > targetGain)
             m_outputGain = Math.Max(targetGain, m_outputGain - m_gainStep);
+        
         // Device gain is applied in the sound thread; keep samples unscaled here to avoid double attenuation.
-
         if (m_isLowPassFilterEnabled)
         {
             if (!m_lowPassInitialized)

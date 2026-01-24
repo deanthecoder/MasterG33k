@@ -65,17 +65,20 @@ public sealed class LcdScreen : IDisposable
         if (output == null)
             return null;
 
-        if (m_previousOutput == null || m_previousOutput.Length != output.Length)
+        var previous = m_previousOutput;
+        if (previous == null || previous.Length != output.Length)
         {
-            m_previousOutput = new byte[output.Length];
-            Buffer.BlockCopy(output, 0, m_previousOutput, 0, output.Length);
-            return m_previousOutput;
+            previous = new byte[output.Length];
+            Buffer.BlockCopy(output, 0, previous, 0, output.Length);
+            m_previousOutput = previous;
+            return previous;
         }
 
-        for (var i = 0; i < output.Length; i++)
-            m_previousOutput[i] = (byte)((m_previousOutput[i] * 3 + output[i] * 2) / 5);
+        var length = output.Length;
+        for (var i = 0; i < length; i++)
+            previous[i] = (byte)((previous[i] * 3 + output[i] * 2) / 5);
 
-        return m_previousOutput;
+        return previous;
     }
 
     private void CachePreviousOutput(byte[] output)
