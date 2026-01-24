@@ -8,8 +8,10 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using System.Runtime.InteropServices;
 using DTC.Core;
 using DTC.Core.Extensions;
+using DTC.Z80.Snapshot;
 
 namespace DTC.Z80.Devices;
 
@@ -740,5 +742,89 @@ public sealed class SmsVdp
         VramRead = 0,
         VramWrite = 1,
         CramWrite = 3
+    }
+
+    internal int GetStateSize() =>
+        sizeof(byte) + // m_isPal.
+        sizeof(ushort) + // m_address.
+        sizeof(byte) * 4 + // m_readBuffer, m_controlLatchLow, m_accessMode, m_hCounterLatched.
+        sizeof(byte) * 6 + // m_isControlLatchFull, m_status, m_interruptPending, m_wasMode4, m_warnedNonMode4, m_warnedMode2.
+        sizeof(byte) * 1 + // m_warnedMode4WithoutMode2.
+        sizeof(int) * 4 + // m_cycleAccumulator, m_vCounter, m_lineCounter, m_lastDisplayHeight.
+        m_vram.Length +
+        m_cram.Length +
+        m_registers.Length +
+        m_frameBuffer.Length +
+        m_bgPriority.Length +
+        m_spriteCollision.Length +
+        m_spritesOnLine.Length * sizeof(int) +
+        m_spriteMaskPerLine.Length * sizeof(ulong);
+
+    internal void SaveState(ref StateWriter writer)
+    {
+        writer.WriteBool(m_isPal);
+        writer.WriteUInt16(m_address);
+        writer.WriteByte(m_readBuffer);
+        writer.WriteByte(m_controlLatchLow);
+        writer.WriteBool(m_isControlLatchFull);
+        writer.WriteByte((byte)m_accessMode);
+        writer.WriteByte(m_hCounterLatched);
+        writer.WriteInt32(m_cycleAccumulator);
+        writer.WriteInt32(m_vCounter);
+        writer.WriteInt32(m_lineCounter);
+        writer.WriteByte(m_status);
+        writer.WriteBool(m_interruptPending);
+        writer.WriteBool(m_wasMode4);
+        writer.WriteInt32(m_lastDisplayHeight);
+        writer.WriteBool(m_warnedNonMode4);
+        writer.WriteBool(m_warnedMode2);
+        writer.WriteBool(m_warnedMode4WithoutMode2);
+
+        writer.WriteBytes(m_vram);
+        writer.WriteBytes(m_cram);
+        writer.WriteBytes(m_registers);
+        writer.WriteBytes(m_frameBuffer);
+        writer.WriteBytes(m_bgPriority);
+        writer.WriteBytes(m_spriteCollision);
+        writer.WriteBytes(MemoryMarshal.AsBytes(m_spritesOnLine.AsSpan()));
+        writer.WriteBytes(MemoryMarshal.AsBytes(m_spriteMaskPerLine.AsSpan()));
+    }
+
+    internal void LoadState(ref StateReader reader)
+    {
+        var isPal = reader.ReadBool();
+        SetIsPal(isPal);
+        m_address = reader.ReadUInt16();
+        m_readBuffer = reader.ReadByte();
+        m_controlLatchLow = reader.ReadByte();
+        m_isControlLatchFull = reader.ReadBool();
+        m_accessMode = (AccessMode)reader.ReadByte();
+        m_hCounterLatched = reader.ReadByte();
+        m_cycleAccumulator = reader.ReadInt32();
+        m_vCounter = reader.ReadInt32();
+        m_lineCounter = reader.ReadInt32();
+        m_status = reader.ReadByte();
+        m_interruptPending = reader.ReadBool();
+        m_wasMode4 = reader.ReadBool();
+        m_lastDisplayHeight = reader.ReadInt32();
+        m_warnedNonMode4 = reader.ReadBool();
+        m_warnedMode2 = reader.ReadBool();
+        m_warnedMode4WithoutMode2 = reader.ReadBool();
+
+        reader.ReadBytes(m_vram);
+        reader.ReadBytes(m_cram);
+        reader.ReadBytes(m_registers);
+        reader.ReadBytes(m_frameBuffer);
+        reader.ReadBytes(m_bgPriority);
+        reader.ReadBytes(m_spriteCollision);
+        reader.ReadBytes(MemoryMarshal.AsBytes(m_spritesOnLine.AsSpan()));
+        reader.ReadBytes(MemoryMarshal.AsBytes(m_spriteMaskPerLine.AsSpan()));
+    }
+
+    public void CopyFrameBuffer(Span<byte> destination)
+    {
+        if (destination.Length != m_frameBuffer.Length)
+            throw new ArgumentException("Frame buffer size mismatch.", nameof(destination));
+        m_frameBuffer.AsSpan().CopyTo(destination);
     }
 }

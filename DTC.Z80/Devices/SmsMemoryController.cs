@@ -8,6 +8,8 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
+using DTC.Z80.Snapshot;
+
 namespace DTC.Z80.Devices;
 
 /// <summary>
@@ -88,4 +90,22 @@ public sealed class SmsMemoryController : IMemDevice
     public SmsRomDevice BiosRom { get; private set; }
 
     public SmsRomDevice Cartridge { get; private set; }
+
+    internal int GetStateSize() =>
+        sizeof(byte) + sizeof(byte);
+
+    internal void SaveState(ref StateWriter writer)
+    {
+        writer.WriteByte(Control);
+        writer.WriteBool(m_forceCartridgeEnabled);
+    }
+
+    internal void LoadState(ref StateReader reader)
+    {
+        var control = reader.ReadByte();
+        m_forceCartridgeEnabled = reader.ReadBool();
+        Control = control;
+        if (m_forceCartridgeEnabled)
+            Control = (byte)(Control & ~0x40);
+    }
 }

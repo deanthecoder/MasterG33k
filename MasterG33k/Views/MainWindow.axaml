@@ -4,6 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:viewModels="clr-namespace:MasterG33k.ViewModels"
         xmlns:dialogHostAvalonia="clr-namespace:DialogHostAvalonia;assembly=DialogHost.Avalonia"
+        xmlns:views="clr-namespace:MasterG33k.Views"
         xmlns:converters="clr-namespace:MasterG33k.Converters"
         xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         xmlns:ui="clr-namespace:DTC.Core.UI;assembly=DTC.Core"
@@ -36,6 +37,11 @@
         <KeyBinding Command="{Binding LoadGameRom}" Gesture="{OnPlatform 'ctrl+o', macOS='⌘+o'}" />
         <KeyBinding Command="{Binding ResetDevice}" Gesture="{OnPlatform 'ctrl+r', macOS='⌘+r'}" />
         <KeyBinding Command="{Binding ToggleRecording}" Gesture="{OnPlatform 'ctrl+m', macOS='⌘+m'}" />
+        <KeyBinding Command="{Binding OpenDialogCommand, ElementName=Host}" Gesture="Back">
+            <KeyBinding.CommandParameter>
+                <views:RollbackDialog DataContext="{Binding SnapshotHistory}" />
+            </KeyBinding.CommandParameter>
+        </KeyBinding>
     </Window.KeyBindings>
 
     <dialogHostAvalonia:DialogHost x:Name="Host" OverlayBackground="Black">
@@ -66,9 +72,6 @@
                         <MenuItem Header="Stop _Recording..." Command="{Binding StopRecording}"
                                   InputGesture="{OnPlatform 'ctrl+m', macOS='⌘+m'}"
                                   IsVisible="{Binding IsRecording}" />
-                        <MenuItem Header="_Save Snapshot..." Command="{Binding SaveSnapshot}"
-                                  InputGesture="{OnPlatform 'ctrl+s', macOS='⌘+s'}"
-                                  IsEnabled="False" />
                         <Separator />
                         <MenuItem Header="_Exit" Command="{Binding CloseCommand}" />
                     </MenuItem>
@@ -198,8 +201,10 @@
 
                     <Button Command="{Binding OpenDialogCommand, ElementName=Host}"
                             Theme="{DynamicResource MaterialFlatButton}"
-                            ToolTip.Tip="Rollback (not yet implemented)"
-                            IsEnabled="False">
+                            ToolTip.Tip="This is what makes time travel possible.">
+                        <Button.CommandParameter>
+                            <views:RollbackDialog DataContext="{Binding SnapshotHistory}" />
+                        </Button.CommandParameter>
                         <Viewbox Width="24" Height="24">
                             <Path Fill="White">
                                 <Path.Data>

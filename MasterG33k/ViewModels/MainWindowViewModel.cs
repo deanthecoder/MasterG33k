@@ -28,10 +28,11 @@ using DTC.Core.ViewModels;
 using DTC.Z80;
 using DTC.Z80.Devices;
 using DTC.Z80.HostDevices;
+using DTC.Z80.Snapshot;
 
 namespace MasterG33k.ViewModels;
 
-public sealed class MainWindowViewModel : ViewModelBase, IDisposable
+public sealed class MainWindowViewModel : ViewModelBase, IDisposable, ISnapshotHost
 {
     private const int PauseRefreshIntervalMs = 33;
     private const int AudioSampleRateHz = 44100;
@@ -46,6 +47,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly SmsVdp m_vdp;
     private readonly SmsJoypad m_joypad;
     private readonly SmsMemoryController m_memoryController;
+    private readonly SmsPortDevice m_portDevice;
     private readonly Lock m_cpuStepLock = new();
     private readonly ManualResetEventSlim m_cpuPauseEvent = new(initialState: true);
     private Thread m_cpuThread;
@@ -67,10 +69,12 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private bool m_isRecordingIndicatorOn;
     private bool m_hasLoggedVideoStandard;
     private bool m_lastLoggedIsPal;
+    private string m_loadedRomPath;
 
     public MruFiles Mru { get; }
     public IImage Display { get; }
     public AboutInfo AboutInfo { get; } = AboutInfoProvider.Info;
+    public SnapshotHistory SnapshotHistory { get; }
 
     public Settings Settings => Settings.Instance;
 
@@ -155,15 +159,16 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         m_memoryController = new SmsMemoryController();
         m_audioSink = new SoundDevice(AudioSampleRateHz);
         m_psg = new SmsPsg(m_audioSink, (int)GetEffectiveCpuHz());
-        var portDevice = new SmsPortDevice(m_vdp, m_joypad, m_memoryController, psg: m_psg);
+        m_portDevice = new SmsPortDevice(m_vdp, m_joypad, m_memoryController, psg: m_psg);
         m_joypad.PausePressed += (_, _) =>
         {
             ToggleCpuPause();
         };
-        m_cpu = new Cpu(new Bus(new Memory(), portDevice));
+        m_cpu = new Cpu(new Bus(new Memory(), m_portDevice));
         m_cpu.Bus.Attach(new SmsRamMirrorDevice(m_cpu.MainMemory));
         m_cpu.Bus.Attach(m_memoryController);
         m_clockSync = new ClockSync(GetEffectiveCpuHz, () => m_cpu.TStatesSinceCpuStart, () => m_cpu.Reset());
+        SnapshotHistory = new SnapshotHistory(this, (ulong)GetEffectiveCpuHz());
         Settings.PropertyChanged += OnSettingsPropertyChanged;
         IsCpuHistoryTracked = Settings.IsCpuHistoryTracked;
         ApplyVideoStandardSetting();
@@ -437,8 +442,6 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         return -1;
     }
 
-    public void SaveSnapshot() => Logger.Instance.Info("Snapshots are not implemented yet.");
-
     public void OpenLog()
     {
         var logFile = Assembly.GetEntryAssembly()
@@ -463,6 +466,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             m_clockSync.Reset();
             m_lastCpuTStates = 0;
         }
+        if (!string.IsNullOrEmpty(m_loadedRomPath))
+            SnapshotHistory?.ResetForRom(m_loadedRomPath);
         SetPaused(false);
         Logger.Instance.Info("CPU reset.");
     }
@@ -534,6 +539,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         m_vdp.SetIsPal(Settings.IsPalEnabled);
         m_psg.SetCpuClockHz((int)GetEffectiveCpuHz());
         m_clockSync.Resync();
+        SnapshotHistory?.SetTicksPerSample((ulong)GetEffectiveCpuHz());
 
         var isPal = Settings.IsPalEnabled;
         if (m_hasLoggedVideoStandard && m_lastLoggedIsPal == isPal)
@@ -581,9 +587,11 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         if (addToMru)
             Mru.Add(romFile);
         Settings.LastRomPath = romFile.FullName;
+        m_loadedRomPath = romFile.FullName;
 
         m_currentRomTitle = romName;
         WindowTitle = $"MasterG33k - {m_currentRomTitle}";
+        SnapshotHistory?.ResetForRom(m_loadedRomPath);
         StartCpuIfNeeded();
         LogRomInfo(romFile, romData);
         return true;
@@ -767,6 +775,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         m_hasFrameChecksum = true;
         m_screen.Update(frameBuffer);
         m_recordingSession?.CaptureFrame();
+        SnapshotHistory?.OnFrameRendered((ulong)m_cpu.TStatesSinceCpuStart);
         DisplayUpdated?.Invoke(this, EventArgs.Empty);
     }
 
@@ -860,6 +869,55 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             m_session.OnAudioSamples(samples, sampleRate);
     }
 
+    bool ISnapshotHost.IsRunning => m_cpuThread != null;
+
+    bool ISnapshotHost.HasLoadedCartridge => m_memoryController?.Cartridge != null;
+
+    ulong ISnapshotHost.CpuClockTicks => (ulong)(m_cpu?.TStatesSinceCpuStart ?? 0);
+
+    int ISnapshotHost.GetStateSize() =>
+        SmsSnapshot.GetStateSize(m_cpu, m_cpu.MainMemory, m_memoryController, m_portDevice, m_vdp, m_psg);
+
+    void ISnapshotHost.CaptureState(MachineState state, Span<byte> frameBuffer)
+    {
+        if (state == null)
+            throw new ArgumentNullException(nameof(state));
+
+        lock (m_cpuStepLock)
+        {
+            SmsSnapshot.Save(state, m_cpu, m_cpu.MainMemory, m_memoryController, m_portDevice, m_vdp, m_psg);
+            m_vdp.CopyFrameBuffer(frameBuffer);
+        }
+    }
+
+    void ISnapshotHost.LoadState(MachineState state) =>
+        ApplySnapshotState(state);
+
+    private void RefreshDisplayFromVdp()
+    {
+        var frameBuffer = new byte[SmsVdp.FrameWidth * SmsVdp.FrameHeight * 4];
+        m_vdp.CopyFrameBuffer(frameBuffer);
+        m_lastFrameBuffer = frameBuffer;
+        m_lastFrameChecksum = ComputeFrameChecksum(frameBuffer);
+        m_lastFrameTicks = m_cpu.TStatesSinceCpuStart;
+        m_hasFrameChecksum = true;
+        m_screen.Update(frameBuffer);
+        DisplayUpdated?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void ApplySnapshotState(MachineState state)
+    {
+        if (state == null)
+            throw new ArgumentNullException(nameof(state));
+
+        lock (m_cpuStepLock)
+            SmsSnapshot.Load(state, m_cpu, m_cpu.MainMemory, m_memoryController, m_portDevice, m_vdp, m_psg);
+
+        RefreshDisplayFromVdp();
+        m_clockSync.Resync();
+        m_lastCpuTStates = m_cpu.TStatesSinceCpuStart;
+    }
+
     private static byte[] ReadRomData(FileInfo romFile, out string romName)
     {
         romName = romFile?.Name;
@@ -888,4 +946,5 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         return null;
     }
+
 }

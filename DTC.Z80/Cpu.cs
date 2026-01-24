@@ -10,6 +10,7 @@
 using System.Diagnostics;
 using DTC.Z80.Debuggers;
 using DTC.Z80.Devices;
+using DTC.Z80.Snapshot;
 
 namespace DTC.Z80;
 
@@ -270,5 +271,95 @@ public sealed class Cpu
 
         foreach (var debugger in m_debuggers)
             debugger.OnMemoryWrite(this, address, value);
+    }
+
+    internal int GetStateSize() =>
+        sizeof(byte) * 16 + // Main + alt register sets.
+        sizeof(ushort) * 4 + // IX, IY, SP, PC.
+        sizeof(byte) * 2 + // I, R.
+        sizeof(byte) * 5 + // IFF1, IFF2, IsHalted, interrupt pending, NMI pending.
+        sizeof(byte) + // IM.
+        sizeof(int) + // EI delay.
+        sizeof(long) + // CPU ticks.
+        sizeof(ushort); // CurrentInstructionAddress.
+
+    internal void SaveState(ref StateWriter writer)
+    {
+        ref var main = ref Reg.Main;
+        ref var alt = ref Reg.Alt;
+        writer.WriteByte(main.A);
+        writer.WriteByte(main.F);
+        writer.WriteByte(main.B);
+        writer.WriteByte(main.C);
+        writer.WriteByte(main.D);
+        writer.WriteByte(main.E);
+        writer.WriteByte(main.H);
+        writer.WriteByte(main.L);
+
+        writer.WriteByte(alt.A);
+        writer.WriteByte(alt.F);
+        writer.WriteByte(alt.B);
+        writer.WriteByte(alt.C);
+        writer.WriteByte(alt.D);
+        writer.WriteByte(alt.E);
+        writer.WriteByte(alt.H);
+        writer.WriteByte(alt.L);
+
+        writer.WriteUInt16(Reg.IX);
+        writer.WriteUInt16(Reg.IY);
+        writer.WriteUInt16(Reg.SP);
+        writer.WriteUInt16(Reg.PC);
+        writer.WriteByte(Reg.I);
+        writer.WriteByte(Reg.R);
+        writer.WriteBool(Reg.IFF1);
+        writer.WriteBool(Reg.IFF2);
+        writer.WriteByte(Reg.IM);
+
+        writer.WriteBool(IsHalted);
+        writer.WriteBool(m_interruptPending);
+        writer.WriteBool(m_nmiPending);
+        writer.WriteInt32(m_eiDelay);
+        writer.WriteInt64(TStatesSinceCpuStart);
+        writer.WriteUInt16(CurrentInstructionAddress);
+    }
+
+    internal void LoadState(ref StateReader reader)
+    {
+        ref var main = ref Reg.Main;
+        ref var alt = ref Reg.Alt;
+        main.A = reader.ReadByte();
+        main.F = reader.ReadByte();
+        main.B = reader.ReadByte();
+        main.C = reader.ReadByte();
+        main.D = reader.ReadByte();
+        main.E = reader.ReadByte();
+        main.H = reader.ReadByte();
+        main.L = reader.ReadByte();
+
+        alt.A = reader.ReadByte();
+        alt.F = reader.ReadByte();
+        alt.B = reader.ReadByte();
+        alt.C = reader.ReadByte();
+        alt.D = reader.ReadByte();
+        alt.E = reader.ReadByte();
+        alt.H = reader.ReadByte();
+        alt.L = reader.ReadByte();
+
+        Reg.IX = reader.ReadUInt16();
+        Reg.IY = reader.ReadUInt16();
+        Reg.SP = reader.ReadUInt16();
+        Reg.PC = reader.ReadUInt16();
+        Reg.I = reader.ReadByte();
+        Reg.R = reader.ReadByte();
+        Reg.IFF1 = reader.ReadBool();
+        Reg.IFF2 = reader.ReadBool();
+        Reg.IM = reader.ReadByte();
+
+        IsHalted = reader.ReadBool();
+        m_interruptPending = reader.ReadBool();
+        m_nmiPending = reader.ReadBool();
+        m_eiDelay = reader.ReadInt32();
+        TStatesSinceCpuStart = reader.ReadInt64();
+        CurrentInstructionAddress = reader.ReadUInt16();
     }
 }

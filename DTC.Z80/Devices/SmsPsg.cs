@@ -7,7 +7,9 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
+using System.Runtime.InteropServices;
 using DTC.Z80.HostDevices;
+using DTC.Z80.Snapshot;
 
 namespace DTC.Z80.Devices;
 
@@ -353,5 +355,47 @@ public sealed class SmsPsg
         result[^1] = 0;
 
         return result;
+    }
+
+    internal int GetStateSize() =>
+        sizeof(int) * (m_registers.Length + m_phaseCounter.Length + m_polarity.Length + m_antiAliasPosition.Length + m_channelOutput.Length) +
+        sizeof(int) * 4 + // m_latchedRegister, m_noisePeriod, m_noiseShiftRegister, m_cpuClockHz.
+        sizeof(int) * 2 + // m_clockIncrementScaled, m_clockRemainderScaled.
+        sizeof(double) * 2; // m_ticksUntilNextSample, m_ticksPerSample.
+
+    internal void SaveState(ref StateWriter writer)
+    {
+        writer.WriteBytes(MemoryMarshal.AsBytes(m_registers.AsSpan()));
+        writer.WriteBytes(MemoryMarshal.AsBytes(m_phaseCounter.AsSpan()));
+        writer.WriteBytes(MemoryMarshal.AsBytes(m_polarity.AsSpan()));
+        writer.WriteBytes(MemoryMarshal.AsBytes(m_antiAliasPosition.AsSpan()));
+        writer.WriteBytes(MemoryMarshal.AsBytes(m_channelOutput.AsSpan()));
+
+        writer.WriteInt32(m_latchedRegister);
+        writer.WriteInt32(m_noisePeriod);
+        writer.WriteInt32(m_noiseShiftRegister);
+        writer.WriteInt32(m_cpuClockHz);
+        writer.WriteInt32(m_clockIncrementScaled);
+        writer.WriteInt32(m_clockRemainderScaled);
+        writer.WriteDouble(m_ticksUntilNextSample);
+        writer.WriteDouble(m_ticksPerSample);
+    }
+
+    internal void LoadState(ref StateReader reader)
+    {
+        reader.ReadBytes(MemoryMarshal.AsBytes(m_registers.AsSpan()));
+        reader.ReadBytes(MemoryMarshal.AsBytes(m_phaseCounter.AsSpan()));
+        reader.ReadBytes(MemoryMarshal.AsBytes(m_polarity.AsSpan()));
+        reader.ReadBytes(MemoryMarshal.AsBytes(m_antiAliasPosition.AsSpan()));
+        reader.ReadBytes(MemoryMarshal.AsBytes(m_channelOutput.AsSpan()));
+
+        m_latchedRegister = reader.ReadInt32();
+        m_noisePeriod = reader.ReadInt32();
+        m_noiseShiftRegister = reader.ReadInt32();
+        m_cpuClockHz = reader.ReadInt32();
+        m_clockIncrementScaled = reader.ReadInt32();
+        m_clockRemainderScaled = reader.ReadInt32();
+        m_ticksUntilNextSample = reader.ReadDouble();
+        m_ticksPerSample = reader.ReadDouble();
     }
 }

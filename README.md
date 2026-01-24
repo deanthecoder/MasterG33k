@@ -34,9 +34,11 @@ Global key hooks translate the following keys into the SMS joypad:
 - **Open ROM**: `Ctrl+O` (`Cmd+O` on macOS)
 - **Start/stop recording**: `Ctrl+M` (`Cmd+M` on macOS)
 - **Reset console**: `Ctrl+R` (`Cmd+R` on macOS)
+- **Time travel**: `Backspace`
 
 ## Emulator features
 - **ROM loading from ZIPs** – Load standard `.sms` ROMs directly, or from a `.zip` archive containing a Master System ROM. Drag-and-drop is supported.
+- **Time travel snapshots** – Preview and roll back recent gameplay with Backspace.
 - **CRT emulation** – Optional CRT-style rendering including scanlines, phosphor glow, and grain.
 - **Motion blur** – Frame blending in CRT mode to simulate persistence of vision.
 - **Ambient blur background** – Optional blurred background so the game screen stands out while the app blends into your desktop.
@@ -51,6 +53,7 @@ Global key hooks translate the following keys into the SMS joypad:
 - ✔ PSG 4-channel audio
 - ✔ CRT/LCD-style visual effects
 - ✔ Recording and screenshots
+- ✔ Gameplay rollback
 
 ## Highlights
 - **Z80 accuracy** – `DTC.Z80` implements the CPU, memory bus, disassembler, and core devices.

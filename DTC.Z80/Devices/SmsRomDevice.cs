@@ -8,6 +8,8 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
+using DTC.Z80.Snapshot;
+
 namespace DTC.Z80.Devices;
 
 /// <summary>
@@ -109,6 +111,25 @@ public sealed class SmsRomDevice : IMemDevice
 
         // Standard Sega mapper does not apply bank shifting via 0xFFFC.
         return bank;
+    }
+
+    internal int GetStateSize() =>
+        sizeof(byte) * 4;
+
+    internal void SaveState(ref StateWriter writer)
+    {
+        writer.WriteByte(Control);
+        writer.WriteByte(Bank0);
+        writer.WriteByte(Bank1);
+        writer.WriteByte(Bank2);
+    }
+
+    internal void LoadState(ref StateReader reader)
+    {
+        Control = reader.ReadByte();
+        SetBank0(reader.ReadByte());
+        SetBank1(reader.ReadByte());
+        SetBank2(reader.ReadByte());
     }
 
 }

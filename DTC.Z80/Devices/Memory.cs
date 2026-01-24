@@ -7,6 +7,8 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
+using DTC.Z80.Snapshot;
+
 namespace DTC.Z80.Devices;
 
 /// <summary>
@@ -33,4 +35,12 @@ public sealed class Memory : IMemDevice
     public byte Read8(ushort address) => Data[address % Data.Length];
 
     public void Write8(ushort address, byte value) => Data[address % Data.Length] = value;
+
+    internal int GetStateSize() => Data.Length;
+
+    internal void SaveState(ref StateWriter writer) =>
+        writer.WriteBytes(Data);
+
+    internal void LoadState(ref StateReader reader) =>
+        reader.ReadBytes(Data);
 }

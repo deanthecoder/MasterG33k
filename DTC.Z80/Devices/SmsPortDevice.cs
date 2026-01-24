@@ -8,6 +8,7 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 using DTC.Core.Extensions;
+using DTC.Z80.Snapshot;
 
 namespace DTC.Z80.Devices;
 
@@ -157,4 +158,19 @@ public sealed class SmsPortDevice : IPortDevice
     }
 
     private static byte ReadJoypadPortB() => 0xFF;
+
+    internal int GetStateSize() =>
+        sizeof(byte) * 2;
+
+    internal void SaveState(ref StateWriter writer)
+    {
+        writer.WriteByte(m_ioControl);
+        writer.WriteByte(m_audioControl);
+    }
+
+    internal void LoadState(ref StateReader reader)
+    {
+        m_ioControl = reader.ReadByte();
+        m_audioControl = reader.ReadByte();
+    }
 }
