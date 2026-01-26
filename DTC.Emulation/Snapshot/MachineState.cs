@@ -15,7 +15,7 @@ namespace DTC.Emulation.Snapshot;
 /// </summary>
 public sealed class MachineState
 {
-    public const uint Magic = 0x54534D53; // "SMST" (little-endian)
+    public const uint Magic = 0x20435444; // "DTC " (little-endian)
     public const ushort Version = 1;
 
     private readonly byte[] m_data;
