@@ -12,10 +12,10 @@ using System.Diagnostics;
 using System.Text;
 using DTC.Core.Extensions;
 using DTC.Core.UnitTesting;
+using DTC.Emulation;
+using DTC.Emulation.Devices;
 using DTC.Z80;
 using DTC.Z80.Devices;
-
-using DTC.Emulation;
 
 namespace UnitTests;
 

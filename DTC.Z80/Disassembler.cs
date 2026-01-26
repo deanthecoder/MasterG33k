@@ -18,7 +18,7 @@ namespace DTC.Z80;
 /// </summary>
 public static class Disassembler
 {
-    public static string GetInstructionWithOperands(BusBase memory, ushort address)
+    public static string GetInstructionWithOperands(Bus memory, ushort address)
     {
         if (memory == null)
             throw new ArgumentNullException(nameof(memory));
@@ -37,20 +37,20 @@ public static class Disassembler
     private static string GetBaseMnemonic(byte opcode) =>
         Instructions.Instructions.Table[opcode]?.Mnemonic ?? $"DB ${opcode:X2}";
 
-    private static string GetCbInstruction(BusBase memory, ushort address)
+    private static string GetCbInstruction(Bus memory, ushort address)
     {
         var cbOpcode = memory.Read8((ushort)(address + 1));
         return CbInstructions.Table[cbOpcode]?.Mnemonic ?? $"CB ${cbOpcode:X2}";
     }
 
-    private static string GetEdInstruction(BusBase memory, ushort address)
+    private static string GetEdInstruction(Bus memory, ushort address)
     {
         var edOpcode = memory.Read8((ushort)(address + 1));
         var mnemonic = EdInstructions.Table[edOpcode]?.Mnemonic ?? $"ED ${edOpcode:X2}";
         return ResolveImmediateOperands(mnemonic, memory, address, opcodeBytes: 2);
     }
 
-    private static string GetIndexInstruction(BusBase memory, ushort address, bool useIX)
+    private static string GetIndexInstruction(Bus memory, ushort address, bool useIX)
     {
         var opcode = memory.Read8((ushort)(address + 1));
         if (opcode == 0xCB)
@@ -115,7 +115,7 @@ public static class Disassembler
         }
     }
 
-    private static string ResolveImmediateOperands(string mnemonic, BusBase memory, ushort address, int opcodeBytes)
+    private static string ResolveImmediateOperands(string mnemonic, Bus memory, ushort address, int opcodeBytes)
     {
         var immediateLength = GetImmediateLength(mnemonic);
         if (immediateLength == 0)

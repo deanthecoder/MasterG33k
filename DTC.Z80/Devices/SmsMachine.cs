@@ -9,7 +9,6 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 using DTC.Emulation;
 using DTC.Emulation.Audio;
-using DTC.Emulation.Devices;
 using DTC.Emulation.Snapshot;
 using DTC.Z80.Snapshot;
 
@@ -33,7 +32,7 @@ public sealed class SmsMachine : IMachine, IMachineSnapshotter
         MemoryController = new SmsMemoryController();
         Psg = new SmsPsg(audioSink, (int)Descriptor.CpuHz, Descriptor.AudioSampleRateHz);
         m_portDevice = new SmsPortDevice(Vdp, Joypad, MemoryController, psg: Psg);
-        Cpu = new Cpu(new Bus(new Memory(), m_portDevice));
+        Cpu = new Cpu(new Bus(0x10000, m_portDevice));
         Cpu.Bus.Attach(new SmsRamMirrorDevice(Cpu.MainMemory));
         Cpu.Bus.Attach(MemoryController);
     }

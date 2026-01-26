@@ -15,7 +15,7 @@ hardware-specific devices to per-system projects.
 - `AudioChannelSettings`: Per-channel enable tracking for audio sources.
 - `SoundDevice`: OpenAL output device with capture support.
 - `Memory`: Simple linear RAM device with snapshot helpers.
-- `CpuBase` + `BusBase`: Base types for CPU/bus wiring and debugger callbacks.
+- `CpuBase` + `Bus`: Base types for CPU/bus wiring and debugger callbacks.
 - Debuggers: `MemoryReadDebugger`, `MemoryWriteDebugger`, `PcBreakpointDebugger`.
 
 ## Basic Setup
@@ -30,7 +30,7 @@ hardware-specific devices to per-system projects.
 
 `DTC.Emulation` does not create CPUs or full buses; that stays in each system project.
 Your system project builds a concrete `IMachine` that wires CPU, bus, PPU/VDP,
-APU/PSG, memory, ports, and input together. `Memory` and `BusBase` are provided
+APU/PSG, memory, ports, and input together. `Memory` and `Bus` are provided
 as reusable building blocks.
 
 Typical structure:
@@ -49,7 +49,7 @@ SMS example (simplified):
 var vdp = new SmsVdp();
 var joypad = new SmsJoypad();
 var memory = new SmsMemoryController();
-var psg = new SmsPsg(audioDevice, (int)descriptor.CpuHz, descriptor.AudioSampleRateHz);
+var psg = new SmsPsg(audioDevice, descriptor.CpuHz, descriptor.AudioSampleRateHz);
 var portDevice = new SmsPortDevice(vdp, joypad, memory, psg);
 var cpu = new Cpu(new Bus(new Memory(), portDevice));
 cpu.Bus.Attach(new SmsRamMirrorDevice(cpu.MainMemory));
@@ -120,5 +120,5 @@ var emulator = new EmulatorViewModel(
 
 ## Notes
 
-- `BusBase` sizes itself from the main memory address range.
+- `Bus` sizes itself from the main memory address range.
 - OpenAL is used for audio output (`OpenTK.Audio.OpenAL` package).

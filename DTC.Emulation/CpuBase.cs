@@ -19,12 +19,12 @@ public abstract class CpuBase
 {
     private readonly List<ICpuDebugger> m_debuggers = [];
 
-    protected CpuBase(BusBase bus)
+    protected CpuBase(Bus bus)
     {
         Bus = bus ?? throw new ArgumentNullException(nameof(bus));
     }
 
-    public BusBase Bus { get; }
+    public Bus Bus { get; }
 
     public IReadOnlyCollection<ICpuDebugger> Debuggers => m_debuggers.AsReadOnly();
 

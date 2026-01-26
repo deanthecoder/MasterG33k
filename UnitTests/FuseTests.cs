@@ -10,8 +10,9 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 using DTC.Core.Extensions;
 using DTC.Core.UnitTesting;
+using DTC.Emulation;
+using DTC.Emulation.Devices;
 using DTC.Z80;
-using DTC.Z80.Devices;
 using UnitTests.FuseUtils;
 
 namespace UnitTests;
