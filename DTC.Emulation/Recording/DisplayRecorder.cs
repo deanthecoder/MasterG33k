@@ -15,6 +15,7 @@ using DTC.Core.Extensions;
 using DTC.Core.Recording;
 using DTC.Core.UI;
 using DTC.Emulation.Audio;
+using DTC.Emulation.Rom;
 
 namespace DTC.Emulation.Recording;
 
@@ -129,7 +130,7 @@ public sealed class DisplayRecorder : IDisposable
             Dispatcher.UIThread.Post(() =>
             {
                 busyDialog.Dispose();
-                var prefix = SanitizeFileName(m_romTitleProvider?.Invoke());
+                var prefix = RomNameHelper.GetSafeFileBaseName(m_romTitleProvider?.Invoke(), "Recording");
                 var defaultName = $"{prefix}.mp4";
                 var command = new FileSaveCommand("Save Recording", "MP4 Files", ["*.mp4"], defaultName);
                 command.FileSelected += (_, info) =>
@@ -203,9 +204,6 @@ public sealed class DisplayRecorder : IDisposable
 
         IsIndicatorOn = !IsIndicatorOn;
     }
-
-    private static string SanitizeFileName(string input) =>
-        string.IsNullOrWhiteSpace(input) ? "Recording" : input.ToSafeFileName();
 
     private sealed class RecordingAudioSink : IAudioSampleSink
     {

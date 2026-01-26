@@ -23,6 +23,15 @@
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.1.3" />
+    <PackageReference Include="DialogHost.Avalonia" Version="0.10.3" />
+    <PackageReference Include="OpenTK.Audio.OpenAL" Version="4.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="UI\RollbackDialog.axaml.cs">
+      <DependentUpon>RollbackDialog.axaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Compile>
   </ItemGroup>
 
 </Project>

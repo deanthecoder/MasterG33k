@@ -15,7 +15,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using DTC.Emulation.Snapshot;
 
-namespace MasterG33k.Views;
+namespace DTC.Emulation.UI;
 
 /// <summary>
 /// Dialog content for previewing and restoring recent snapshots.
@@ -104,4 +104,3 @@ public partial class RollbackDialog : UserControl
         m_isSnapshottingPaused = false;
     }
 }
-

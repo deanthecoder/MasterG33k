@@ -25,7 +25,6 @@ using DTC.Emulation.Audio;
 using DTC.Emulation.Rom;
 using DTC.Emulation.Snapshot;
 using DTC.Z80.Devices;
-using DTC.Z80.HostDevices;
 
 namespace MasterG33k.ViewModels;
 
@@ -282,7 +281,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     public void SaveScreenshot()
     {
-        var prefix = SanitizeFileName(m_currentRomTitle);
+        var prefix = RomNameHelper.GetSafeFileBaseName(m_currentRomTitle, "MasterG33k");
         var defaultName = $"{prefix}.tga";
         var command = new FileSaveCommand("Save Screenshot", "TGA Files", ["*.tga"], defaultName);
         command.FileSelected += (_, info) =>
@@ -447,8 +446,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         Settings.LastRomPath = romFile.FullName;
         m_loadedRomPath = romFile.FullName;
 
-        m_currentRomTitle = romName;
-        WindowTitle = $"MasterG33k - {m_currentRomTitle}";
+        m_currentRomTitle = RomNameHelper.GetDisplayName(romName) ?? "MasterG33k";
+        WindowTitle = RomNameHelper.BuildWindowTitle("MasterG33k", m_currentRomTitle);
         SnapshotHistory?.ResetForRom(m_loadedRomPath);
         m_emulator.Start();
         LogRomInfo(romFile, romData);
@@ -499,8 +498,4 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private double GetVideoFrameRate() =>
         GetEffectiveCpuHz() / (SmsVdp.CyclesPerScanline * m_machine.Vdp.TotalScanlines);
 
-    private static string SanitizeFileName(string input) =>
-        string.IsNullOrWhiteSpace(input) ? "MasterG33k" : input.ToSafeFileName();
-
 }
-

@@ -9,6 +9,7 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 using DTC.Emulation;
 using DTC.Z80.Devices;
+using Memory = DTC.Emulation.Devices.Memory;
 
 namespace DTC.Z80;
 
@@ -19,8 +20,8 @@ public sealed class Bus : BusBase
 {
     private readonly IPortDevice m_portDevice;
 
-    public Bus(Memory memory, IPortDevice portDevice = null, int byteSize = 0x10000)
-        : base(memory, byteSize)
+    public Bus(Memory memory, IPortDevice portDevice = null)
+        : base(memory)
     {
         m_portDevice = portDevice ?? DefaultPortDevice.Instance;
         MainMemory = memory ?? throw new ArgumentNullException(nameof(memory));

@@ -5,7 +5,7 @@
              xmlns:dialogHostAvalonia="clr-namespace:DialogHostAvalonia;assembly=DialogHost.Avalonia"
              xmlns:snapshot="clr-namespace:DTC.Emulation.Snapshot;assembly=DTC.Emulation"
              mc:Ignorable="d" d:DesignWidth="420" d:DesignHeight="340"
-             x:Class="MasterG33k.Views.RollbackDialog"
+             x:Class="DTC.Emulation.UI.RollbackDialog"
              x:DataType="snapshot:SnapshotHistory">
     <StackPanel Margin="16,8">
         <Image x:Name="PreviewImage" Width="320" Height="240" Source="{Binding ScreenPreview}"/>

@@ -16,12 +16,13 @@ public abstract class BusBase
 {
     private readonly IMemDevice[] m_devices;
 
-    protected BusBase(IMemDevice mainMemory, int byteSize)
+    protected BusBase(IMemDevice mainMemory)
     {
-        if (byteSize <= 0)
-            throw new ArgumentOutOfRangeException(nameof(byteSize));
-
         MainMemory = mainMemory ?? throw new ArgumentNullException(nameof(mainMemory));
+        if (MainMemory.ToAddr < MainMemory.FromAddr)
+            throw new ArgumentOutOfRangeException(nameof(mainMemory), "Memory address range is invalid.");
+
+        var byteSize = MainMemory.ToAddr + 1;
         m_devices = new IMemDevice[byteSize];
         Attach(MainMemory);
     }

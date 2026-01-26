@@ -8,6 +8,7 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using DTC.Emulation.Devices;
 using DTC.Emulation.Snapshot;
 using DTC.Z80.Devices;
 

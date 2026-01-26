@@ -1,8 +1,8 @@
 # DTC.Emulation
 
 Shared emulator host and UI glue used by multiple systems (e.g., SMS and GB).
-This project focuses on orchestration, display handling, recording, and rollback,
-leaving hardware-specific device implementations to per-system projects.
+Focuses on orchestration, display handling, recording, and rollback while leaving
+hardware-specific devices to per-system projects.
 
 ## Key Types
 
@@ -11,8 +11,10 @@ leaving hardware-specific device implementations to per-system projects.
 - `LcdScreen`: Applies screen effects and exposes a `WriteableBitmap` for UI binding.
 - `SnapshotHistory`: Periodic snapshots for rollback support.
 - `RomLoader`: Shared ROM and zip entry loading.
+- `RomNameHelper`: Consistent ROM display names + safe file base names.
 - `AudioChannelSettings`: Per-channel enable tracking for audio sources.
-- `IAudioOutputDevice`: Audio output abstraction (capture + enable/disable).
+- `SoundDevice`: OpenAL output device with capture support.
+- `Memory`: Simple linear RAM device with snapshot helpers.
 - `CpuBase` + `BusBase`: Base types for CPU/bus wiring and debugger callbacks.
 - Debuggers: `MemoryReadDebugger`, `MemoryWriteDebugger`, `PcBreakpointDebugger`.
 
@@ -26,9 +28,10 @@ leaving hardware-specific device implementations to per-system projects.
 
 ## Machine Wiring (CPU/Bus/Devices)
 
-`DTC.Emulation` does not create CPUs or buses; that stays in each system project.
+`DTC.Emulation` does not create CPUs or full buses; that stays in each system project.
 Your system project builds a concrete `IMachine` that wires CPU, bus, PPU/VDP,
-APU/PSG, memory, ports, and input together.
+APU/PSG, memory, ports, and input together. `Memory` and `BusBase` are provided
+as reusable building blocks.
 
 Typical structure:
 
@@ -109,3 +112,13 @@ var emulator = new EmulatorViewModel(
 
 // Bind emulator.Display and call emulator.Start(), emulator.TogglePause(), etc.
 ```
+
+## UI Helpers
+
+- `UI.RollbackDialog`: DialogHost content for previewing/restoring snapshots.
+- `UI.RomFileToNameConverter`: MRU-friendly ROM name display.
+
+## Notes
+
+- `BusBase` sizes itself from the main memory address range.
+- OpenAL is used for audio output (`OpenTK.Audio.OpenAL` package).

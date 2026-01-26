@@ -4,8 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:viewModels="clr-namespace:MasterG33k.ViewModels"
         xmlns:dialogHostAvalonia="clr-namespace:DialogHostAvalonia;assembly=DialogHost.Avalonia"
-        xmlns:views="clr-namespace:MasterG33k.Views"
-        xmlns:converters="clr-namespace:MasterG33k.Converters"
+        xmlns:emulationUi="clr-namespace:DTC.Emulation.UI;assembly=DTC.Emulation"
         xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         xmlns:ui="clr-namespace:DTC.Core.UI;assembly=DTC.Core"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
@@ -21,7 +20,7 @@
     </Design.DataContext>
 
     <Window.Resources>
-        <converters:RomFileToNameConverter x:Key="RomFileToNameConverter" />
+        <emulationUi:RomFileToNameConverter x:Key="RomFileToNameConverter" />
     </Window.Resources>
     
     <Window.Styles>
@@ -39,7 +38,7 @@
         <KeyBinding Command="{Binding ToggleRecording}" Gesture="{OnPlatform 'ctrl+m', macOS='⌘+m'}" />
         <KeyBinding Command="{Binding OpenDialogCommand, ElementName=Host}" Gesture="Back">
             <KeyBinding.CommandParameter>
-                <views:RollbackDialog DataContext="{Binding SnapshotHistory}" />
+                <emulationUi:RollbackDialog DataContext="{Binding SnapshotHistory}" />
             </KeyBinding.CommandParameter>
         </KeyBinding>
     </Window.KeyBindings>
@@ -203,7 +202,7 @@
                             Theme="{DynamicResource MaterialFlatButton}"
                             ToolTip.Tip="This is what makes time travel possible.">
                         <Button.CommandParameter>
-                            <views:RollbackDialog DataContext="{Binding SnapshotHistory}" />
+                            <emulationUi:RollbackDialog DataContext="{Binding SnapshotHistory}" />
                         </Button.CommandParameter>
                         <Viewbox Width="24" Height="24">
                             <Path Fill="White">

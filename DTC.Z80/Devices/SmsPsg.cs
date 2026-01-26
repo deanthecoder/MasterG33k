@@ -9,8 +9,8 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 using System.Runtime.InteropServices;
 using DTC.Emulation;
+using DTC.Emulation.Audio;
 using DTC.Emulation.Snapshot;
-using DTC.Z80.HostDevices;
 
 namespace DTC.Z80.Devices;
 
@@ -40,7 +40,6 @@ public sealed class SmsPsg : IAudioSource
     private readonly bool[] m_channelEnabled = [true, true, true, true];
     private readonly SoundDevice m_audioSink;
     private int m_cpuClockHz;
-    private readonly int m_sampleRate;
     private double m_ticksPerSample;
     private int m_clockIncrementScaled;
     private int m_clockRemainderScaled;
@@ -53,16 +52,16 @@ public sealed class SmsPsg : IAudioSource
     {
         m_audioSink = audioSink ?? throw new ArgumentNullException(nameof(audioSink));
         m_cpuClockHz = cpuClockHz;
-        m_sampleRate = sampleRate;
+        SampleRateHz = sampleRate;
         UpdateTiming();
         Reset();
     }
 
-    public int SampleRateHz => m_sampleRate;
+    public int SampleRateHz { get; }
 
     int IAudioSource.ChannelCount => ChannelCount;
 
-    int IAudioSource.SampleRateHz => m_sampleRate;
+    int IAudioSource.SampleRateHz => SampleRateHz;
 
     public void Reset()
     {
@@ -134,8 +133,8 @@ public sealed class SmsPsg : IAudioSource
 
     private void UpdateTiming()
     {
-        m_ticksPerSample = (double)m_cpuClockHz / m_sampleRate;
-        m_clockIncrementScaled = (m_cpuClockHz << FixedPointShift) / 16 / m_sampleRate;
+        m_ticksPerSample = (double)m_cpuClockHz / SampleRateHz;
+        m_clockIncrementScaled = (m_cpuClockHz << FixedPointShift) / 16 / SampleRateHz;
     }
 
     private void InitializeRegistersForChannel(int channel)
@@ -336,7 +335,7 @@ public sealed class SmsPsg : IAudioSource
         var frequency = m_cpuClockHz / (divider * toneRegister);
 
         // SN76489 tone frequency is cpuClock / (32 * tone). If at/above Nyquist, treat as DC.
-        return frequency >= m_sampleRate * 0.5;
+        return frequency >= SampleRateHz * 0.5;
     }
 
     private static int GetToneDcAverage(int toneRegister, int volume) =>
@@ -404,4 +403,3 @@ public sealed class SmsPsg : IAudioSource
         m_ticksPerSample = reader.ReadDouble();
     }
 }
-

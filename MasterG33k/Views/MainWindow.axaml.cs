@@ -16,6 +16,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using DTC.Core;
+using DTC.Emulation.Rom;
 using MasterG33k.ViewModels;
 
 namespace MasterG33k.Views;
@@ -116,6 +117,5 @@ public partial class MainWindow : Window
     }
 
     private static bool IsSupportedRom(string path) =>
-        path.EndsWith(".sms", StringComparison.OrdinalIgnoreCase) ||
-        path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
+        RomLoader.IsSupportedRom(path, [".sms"]);
 }

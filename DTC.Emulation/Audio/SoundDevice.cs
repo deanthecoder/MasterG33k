@@ -11,10 +11,9 @@
 
 using System.Buffers;
 using DTC.Core;
-using DTC.Emulation.Audio;
 using OpenTK.Audio.OpenAL;
 
-namespace DTC.Z80.HostDevices;
+namespace DTC.Emulation.Audio;
 
 /// <summary>
 /// A sound device to interface with the host machine's sound card.
@@ -24,11 +23,11 @@ public class SoundDevice : IAudioOutputDevice
     private const int BufferCount = 3;
     private const double VolumeRampMs = 100.0;
     private const double LowPassCutoffHz = 7000.0;
-    
+
     // Analog output is typically AC-coupled (series capacitor) which blocks DC offsets.
     // Without this, DC bias in the generated signal can cause pops/bumps when the bias changes.
     private const double HighPassCutoffHz = 20.0;
-    
+
     // Default output gain. 1.0 can be uncomfortably loud on some systems; 0.5 gives headroom.
     private const double DefaultGain = 0.5;
     private const int CaptureBufferFrames = 1024;
@@ -66,7 +65,7 @@ public class SoundDevice : IAudioOutputDevice
     private readonly short[] m_captureBuffer = new short[CaptureBufferFrames * 2];
     private int m_captureBufferIndex;
     private IAudioSampleSink m_captureSink;
-    
+
     public SoundDevice(int sampleHz)
     {
         m_sampleRate = sampleHz;
@@ -115,7 +114,7 @@ public class SoundDevice : IAudioOutputDevice
     private void SoundLoop()
     {
         Logger.Instance.Info("Sound thread started.");
-        
+
         WaitForInitialData();
 
         // Pre-fill all buffers with initial data.
@@ -156,7 +155,7 @@ public class SoundDevice : IAudioOutputDevice
         }
 
         AL.SourceStop(m_source);
-        
+
         Logger.Instance.Info("Sound thread stopped.");
     }
 
@@ -195,7 +194,7 @@ public class SoundDevice : IAudioOutputDevice
         var waitMs = Math.Min(queuedMs * 0.25, m_bufferDurationMs);
         return (int)Math.Max(1, waitMs);
     }
-    
+
     private static void ExecuteAl(string operation, Action action)
     {
         action();
@@ -284,7 +283,7 @@ public class SoundDevice : IAudioOutputDevice
             m_outputGain = Math.Min(targetGain, m_outputGain + m_gainStep);
         else if (m_outputGain > targetGain)
             m_outputGain = Math.Max(targetGain, m_outputGain - m_gainStep);
-        
+
         // Device gain is applied in the sound thread; keep samples unscaled here to avoid double attenuation.
         if (m_isLowPassFilterEnabled)
         {
@@ -354,7 +353,7 @@ public class SoundDevice : IAudioOutputDevice
             m_cpuBuffer.Write(leftByte);
             m_cpuBuffer.Write(rightByte);
         }
-        
+
         m_dataAvailable.Set();
         return;
 
@@ -364,7 +363,7 @@ public class SoundDevice : IAudioOutputDevice
         static short ToPcm16(double sample) =>
             (short)Math.Clamp(sample * 32767.0, short.MinValue, short.MaxValue);
     }
-    
+
     public void SetEnabled(bool isSoundEnabled)
     {
         if (m_isSoundEnabled == isSoundEnabled)
@@ -424,14 +423,14 @@ public class SoundDevice : IAudioOutputDevice
         var dt = 1.0 / sampleRate;
         return rc / (rc + dt);
     }
-    
+
     public void Dispose()
     {
         m_isCancelled = true;
         m_dataAvailable.Set();
         m_loopTask?.Wait();
         m_loopTask = null;
-        
+
         AL.DeleteBuffers(m_buffers);
         AL.DeleteSource(m_source);
         ALC.DestroyContext(ALC.GetCurrentContext());
