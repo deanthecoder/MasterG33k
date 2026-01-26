@@ -8,8 +8,12 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
-namespace DTC.Z80.Debuggers;
 
+namespace DTC.Emulation.Debuggers;
+
+/// <summary>
+/// Debugger that triggers a callback when a specific memory address is read.
+/// </summary>
 public sealed class MemoryReadDebugger : CpuDebuggerBase
 {
     private readonly ushort m_targetAddress;
@@ -30,7 +34,7 @@ public sealed class MemoryReadDebugger : CpuDebuggerBase
         m_onRead = onRead;
     }
 
-    public override void OnMemoryRead(Cpu cpu, ushort address, byte value)
+    public override void OnMemoryRead(CpuBase cpu, ushort address, byte value)
     {
         if (address != m_targetAddress)
             return;
@@ -38,7 +42,6 @@ public sealed class MemoryReadDebugger : CpuDebuggerBase
         if (m_targetValue.HasValue && value != m_targetValue.Value)
             return;
 
-        cpu.InstructionLogger.Write(() => $"[Debugger] Read {address:X4} => {value:X2} at PC {cpu.CurrentInstructionAddress:X4}.");
         m_onRead?.Invoke(value);
     }
 }

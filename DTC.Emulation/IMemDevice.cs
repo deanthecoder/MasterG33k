@@ -8,27 +8,19 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
-using DTC.Emulation;
-
-namespace DTC.Z80.Devices;
+namespace DTC.Emulation;
 
 /// <summary>
-/// Default port device that returns the upper address byte (suitable for Fuse tests).
+/// Represents a memory-mapped device.
 /// </summary>
 /// <remarks>
-/// Acts as a stub for unmapped I/O by mirroring the high port byte on reads.
+/// Implementations expose a fixed address range for reads/writes.
 /// </remarks>
-public sealed class DefaultPortDevice : IPortDevice
+public interface IMemDevice
 {
-    public static DefaultPortDevice Instance { get; } = new();
+    ushort FromAddr { get; }
+    ushort ToAddr { get; }
 
-    private DefaultPortDevice()
-    {
-    }
-
-    public byte Read8(ushort portAddress) => (byte)(portAddress >> 8);
-
-    public void Write8(ushort portAddress, byte value)
-    {
-    }
+    byte Read8(ushort addr);
+    void Write8(ushort addr, byte value);
 }

@@ -15,6 +15,8 @@ using DTC.Core.UnitTesting;
 using DTC.Z80;
 using DTC.Z80.Devices;
 
+using DTC.Emulation;
+
 namespace UnitTests;
 
 [TestFixture]

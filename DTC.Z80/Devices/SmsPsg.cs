@@ -8,15 +8,16 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 using System.Runtime.InteropServices;
+using DTC.Emulation;
+using DTC.Emulation.Snapshot;
 using DTC.Z80.HostDevices;
-using DTC.Z80.Snapshot;
 
 namespace DTC.Z80.Devices;
 
 /// <summary>
 /// SN76489 PSG (SMS/GG).
 /// </summary>
-public sealed class SmsPsg
+public sealed class SmsPsg : IAudioSource
 {
     private const int FixedPointShift = 8;
     private const int NoAntiAlias = int.MinValue;
@@ -58,6 +59,10 @@ public sealed class SmsPsg
     }
 
     public int SampleRateHz => m_sampleRate;
+
+    int IAudioSource.ChannelCount => ChannelCount;
+
+    int IAudioSource.SampleRateHz => m_sampleRate;
 
     public void Reset()
     {
@@ -399,3 +404,4 @@ public sealed class SmsPsg
         m_ticksPerSample = reader.ReadDouble();
     }
 }
+

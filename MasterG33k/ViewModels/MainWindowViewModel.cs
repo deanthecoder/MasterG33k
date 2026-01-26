@@ -11,65 +11,37 @@ using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
-using System.Threading;
 using Avalonia;
 using Avalonia.Media;
-using Avalonia.Threading;
 using DTC.Core;
 using DTC.Core.Commands;
 using DTC.Core.Extensions;
-using DTC.Core.Image;
-using DTC.Core.Recording;
 using DTC.Core.UI;
 using DTC.Core.ViewModels;
-using DTC.Z80;
+using DTC.Emulation;
+using DTC.Emulation.Audio;
+using DTC.Emulation.Rom;
+using DTC.Emulation.Snapshot;
 using DTC.Z80.Devices;
 using DTC.Z80.HostDevices;
-using DTC.Z80.Snapshot;
 
 namespace MasterG33k.ViewModels;
 
-public sealed class MainWindowViewModel : ViewModelBase, IDisposable, ISnapshotHost
+public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 {
-    private const int PauseRefreshIntervalMs = 33;
     private const int AudioSampleRateHz = 44100;
-    private const short RecordingAudioChannels = 2;
     private string m_windowTitle;
-    private bool m_isSoundChannel1Enabled = true;
-    private bool m_isSoundChannel2Enabled = true;
-    private bool m_isSoundChannel3Enabled = true;
-    private bool m_isSoundChannel4Enabled = true;
     private bool m_isCpuHistoryTracked;
-    private readonly Cpu m_cpu;
-    private readonly SmsVdp m_vdp;
-    private readonly SmsJoypad m_joypad;
-    private readonly SmsMemoryController m_memoryController;
-    private readonly SmsPortDevice m_portDevice;
-    private readonly Lock m_cpuStepLock = new();
-    private readonly ManualResetEventSlim m_cpuPauseEvent = new(initialState: true);
-    private Thread m_cpuThread;
-    private bool m_shutdownRequested;
-    private volatile bool m_isCpuPaused;
-    private readonly ClockSync m_clockSync;
-    private readonly LcdScreen m_screen;
-    private readonly SoundDevice m_audioSink;
-    private readonly SmsPsg m_psg;
-    private volatile bool m_isPaused;
-    private long m_lastCpuTStates;
-    private uint m_lastFrameChecksum;
-    private long m_lastFrameTicks;
-    private bool m_hasFrameChecksum;
-    private volatile byte[] m_lastFrameBuffer;
-    private RecordingSession m_recordingSession;
-    private IAudioSampleSink m_recordingAudioSink;
-    private DispatcherTimer m_recordingIndicatorTimer;
-    private bool m_isRecordingIndicatorOn;
+    private readonly SmsMachine m_machine;
+    private readonly MachineRunner m_machineRunner;
+    private readonly EmulatorViewModel m_emulator;
+    private readonly AudioChannelSettings m_audioChannels;
     private bool m_hasLoggedVideoStandard;
     private bool m_lastLoggedIsPal;
     private string m_loadedRomPath;
+    private static readonly string[] RomExtensions = [".sms"];
 
     public MruFiles Mru { get; }
     public IImage Display { get; }
@@ -86,13 +58,9 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable, ISnapshotH
 
     private string m_currentRomTitle = "MasterG33k";
 
-    public bool IsRecording => m_recordingSession?.IsRecording == true;
+    public bool IsRecording => m_emulator.IsRecording;
 
-    public bool IsRecordingIndicatorOn
-    {
-        get => m_isRecordingIndicatorOn;
-        private set => SetField(ref m_isRecordingIndicatorOn, value);
-    }
+    public bool IsRecordingIndicatorOn => m_emulator.IsRecordingIndicatorOn;
 
     public event EventHandler DisplayUpdated;
 
@@ -105,26 +73,50 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable, ISnapshotH
 
     public bool IsSoundChannel1Enabled
     {
-        get => m_isSoundChannel1Enabled;
-        private set => SetField(ref m_isSoundChannel1Enabled, value);
+        get => m_audioChannels.IsEnabled(1);
+        private set
+        {
+            if (m_audioChannels.IsEnabled(1) == value)
+                return;
+            m_audioChannels.SetChannelEnabled(1, value);
+            OnPropertyChanged();
+        }
     }
 
     public bool IsSoundChannel2Enabled
     {
-        get => m_isSoundChannel2Enabled;
-        private set => SetField(ref m_isSoundChannel2Enabled, value);
+        get => m_audioChannels.IsEnabled(2);
+        private set
+        {
+            if (m_audioChannels.IsEnabled(2) == value)
+                return;
+            m_audioChannels.SetChannelEnabled(2, value);
+            OnPropertyChanged();
+        }
     }
 
     public bool IsSoundChannel3Enabled
     {
-        get => m_isSoundChannel3Enabled;
-        private set => SetField(ref m_isSoundChannel3Enabled, value);
+        get => m_audioChannels.IsEnabled(3);
+        private set
+        {
+            if (m_audioChannels.IsEnabled(3) == value)
+                return;
+            m_audioChannels.SetChannelEnabled(3, value);
+            OnPropertyChanged();
+        }
     }
 
     public bool IsSoundChannel4Enabled
     {
-        get => m_isSoundChannel4Enabled;
-        private set => SetField(ref m_isSoundChannel4Enabled, value);
+        get => m_audioChannels.IsEnabled(4);
+        private set
+        {
+            if (m_audioChannels.IsEnabled(4) == value)
+                return;
+            m_audioChannels.SetChannelEnabled(4, value);
+            OnPropertyChanged();
+        }
     }
 
     public bool IsPalEnabled => Settings.IsPalEnabled;
@@ -140,7 +132,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable, ISnapshotH
                 return;
             Settings.IsCpuHistoryTracked = value;
 #if DEBUG
-            m_cpu.InstructionLogger.IsEnabled = value;
+            m_machine.Cpu.InstructionLogger.IsEnabled = value;
 #endif
         }
     }
@@ -150,25 +142,32 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable, ISnapshotH
         Mru = new MruFiles().InitFromString(Settings.MruFiles);
         Mru.OpenRequested += (_, file) => LoadRomFromFile(file, addToMru: false);
 
-        m_screen = new LcdScreen(SmsVdp.FrameWidth, SmsVdp.FrameHeight);
-        Display = m_screen.Display;
-        m_screen.FrameBuffer.IsCrt = Settings.IsCrtEmulationEnabled;
-        m_vdp = new SmsVdp();
-        m_vdp.FrameRendered += OnFrameRendered;
-        m_joypad = new SmsJoypad();
-        m_memoryController = new SmsMemoryController();
-        m_audioSink = new SoundDevice(AudioSampleRateHz);
-        m_psg = new SmsPsg(m_audioSink, (int)GetEffectiveCpuHz());
-        m_portDevice = new SmsPortDevice(m_vdp, m_joypad, m_memoryController, psg: m_psg);
-        m_joypad.PausePressed += (_, _) =>
+        var screen = new LcdScreen(SmsVdp.FrameWidth, SmsVdp.FrameHeight);
+        var audioSink = new SoundDevice(AudioSampleRateHz);
+
+        var descriptor = CreateMachineDescriptor();
+        m_machine = new SmsMachine(descriptor, audioSink);
+        m_machine.UpdateDescriptor(descriptor);
+        m_machine.Joypad.PausePressed += (_, _) => m_emulator?.TogglePause();
+
+        m_machineRunner = new MachineRunner(m_machine, GetEffectiveCpuHz, e =>
         {
-            ToggleCpuPause();
-        };
-        m_cpu = new Cpu(new Bus(new Memory(), m_portDevice));
-        m_cpu.Bus.Attach(new SmsRamMirrorDevice(m_cpu.MainMemory));
-        m_cpu.Bus.Attach(m_memoryController);
-        m_clockSync = new ClockSync(GetEffectiveCpuHz, () => m_cpu.TStatesSinceCpuStart, () => m_cpu.Reset());
-        SnapshotHistory = new SnapshotHistory(this, (ulong)GetEffectiveCpuHz());
+            Logger.Instance.Error($"Stopping CPU loop due to exception: {e.Message}");
+        });
+        m_emulator = new EmulatorViewModel(
+            m_machine,
+            m_machineRunner,
+            audioSink,
+            screen,
+            GetVideoFrameRate,
+            () => m_currentRomTitle,
+            GetEffectiveCpuHz);
+        m_emulator.DisplayUpdated += (_, _) => DisplayUpdated?.Invoke(this, EventArgs.Empty);
+        m_emulator.PropertyChanged += (_, e) => OnPropertyChanged(e.PropertyName);
+        Display = m_emulator.Display;
+        SnapshotHistory = m_emulator.SnapshotHistory;
+        m_emulator.SetScreenEffectEnabled(Settings.IsCrtEmulationEnabled);
+        m_audioChannels = new AudioChannelSettings(m_machine.Audio);
         Settings.PropertyChanged += OnSettingsPropertyChanged;
         IsCpuHistoryTracked = Settings.IsCpuHistoryTracked;
         ApplyVideoStandardSetting();
@@ -177,7 +176,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable, ISnapshotH
         ApplyLayerVisibility();
         ApplySoundChannelSettings();
 #if DEBUG
-        m_cpu.InstructionLogger.IsEnabled = IsCpuHistoryTracked;
+        m_machine.Cpu.InstructionLogger.IsEnabled = IsCpuHistoryTracked;
 #endif
     }
 
@@ -228,143 +227,36 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable, ISnapshotH
     public void ToggleSoundChannel1()
     {
         IsSoundChannel1Enabled = !IsSoundChannel1Enabled;
-        m_psg.SetChannelEnabled(1, IsSoundChannel1Enabled);
     }
 
     public void ToggleSoundChannel2()
     {
         IsSoundChannel2Enabled = !IsSoundChannel2Enabled;
-        m_psg.SetChannelEnabled(2, IsSoundChannel2Enabled);
     }
 
     public void ToggleSoundChannel3()
     {
         IsSoundChannel3Enabled = !IsSoundChannel3Enabled;
-        m_psg.SetChannelEnabled(3, IsSoundChannel3Enabled);
     }
 
     public void ToggleSoundChannel4()
     {
         IsSoundChannel4Enabled = !IsSoundChannel4Enabled;
-        m_psg.SetChannelEnabled(4, IsSoundChannel4Enabled);
     }
 
     public void ToggleRecording()
     {
-        if (IsRecording)
-            StopRecording();
-        else
-            StartRecording();
+        m_emulator.ToggleRecording();
     }
 
     public void StartRecording()
     {
-        if (IsRecording)
-            return;
-
-        if (!RecordingSession.IsFfmpegAvailable(out _))
-        {
-            DialogService.Instance.ShowMessage(
-                "Recording unavailable",
-                "FFmpeg was not detected. Install FFmpeg and ensure it's on your PATH, then try again.");
-            return;
-        }
-
-        try
-        {
-            m_recordingSession?.Dispose();
-            var audioSettings = new RecordingAudioSettings(AudioSampleRateHz, RecordingAudioChannels);
-            m_recordingSession = new RecordingSession(m_screen.Display, GetVideoFrameRate(), audioSettings);
-            m_recordingSession.Start();
-            m_recordingAudioSink = new RecordingAudioSink(m_recordingSession);
-            m_audioSink.SetCaptureSink(m_recordingAudioSink);
-            StartRecordingIndicator();
-            OnPropertyChanged(nameof(IsRecording));
-        }
-        catch (Exception ex)
-        {
-            m_recordingSession?.Dispose();
-            m_recordingSession = null;
-            m_recordingAudioSink = null;
-            m_audioSink.SetCaptureSink(null);
-            StopRecordingIndicator();
-            DialogService.Instance.ShowMessage(
-                "Unable to start recording",
-                ex.Message);
-        }
+        m_emulator.StartRecording();
     }
 
     public void StopRecording()
     {
-        if (!IsRecording)
-            return;
-
-        var session = m_recordingSession;
-        m_recordingSession = null;
-        m_audioSink.FlushCapture();
-        m_audioSink.SetCaptureSink(null);
-        m_recordingAudioSink = null;
-        StopRecordingIndicator();
-        OnPropertyChanged(nameof(IsRecording));
-
-        if (session == null)
-            return;
-
-        var progress = new ProgressToken();
-        var busyDialog = DialogService.Instance.ShowBusy("Finalizing recording...", progress);
-        var stopTask = session.StopAsync(progress);
-        stopTask.ContinueWith(task =>
-        {
-            if (task.IsFaulted)
-            {
-                Dispatcher.UIThread.Post(() => busyDialog.Dispose());
-                Logger.Instance.Warn($"Recording failed: {task.Exception?.GetBaseException().Message}");
-                session.Dispose();
-                return;
-            }
-
-            var result = task.Result;
-            if (result == null || result.TempFile?.Exists != true)
-            {
-                Dispatcher.UIThread.Post(() => busyDialog.Dispose());
-                Logger.Instance.Warn("Recording failed to produce an output file.");
-                session.Dispose();
-                return;
-            }
-
-            Dispatcher.UIThread.Post(() =>
-            {
-                busyDialog.Dispose();
-                var prefix = SanitizeFileName(m_currentRomTitle);
-                var defaultName = $"{prefix}.mp4";
-                var command = new FileSaveCommand("Save Recording", "MP4 Files", ["*.mp4"], defaultName);
-                command.FileSelected += (_, info) =>
-                {
-                    try
-                    {
-                        File.Move(result.TempFile.FullName, info.FullName, overwrite: true);
-                        var fileInfo = new FileInfo(info.FullName);
-                        var size = fileInfo.Exists ? fileInfo.Length.ToSize() : "unknown size";
-                        Logger.Instance.Info($"Recording stopped. Saved to '{fileInfo.FullName}' ({result.Duration:hh\\:mm\\:ss}, {size}).");
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Instance.Warn($"Failed to save recording: {ex.Message}");
-                    }
-                    finally
-                    {
-                        session.Dispose();
-                    }
-                };
-                command.Cancelled += (_, _) =>
-                {
-                    var size = result.TempFile.Exists ? result.TempFile.Length.ToSize() : "unknown size";
-                    Logger.Instance.Info($"Recording stopped. Discarded temp output ({result.Duration:hh\\:mm\\:ss}, {size}).");
-                    session.Dispose();
-                };
-                command.Execute(null);
-            });
-        });
+        m_emulator.StopRecording();
     }
 
     public void LoadGameRom()
@@ -395,23 +287,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable, ISnapshotH
         var command = new FileSaveCommand("Save Screenshot", "TGA Files", ["*.tga"], defaultName);
         command.FileSelected += (_, info) =>
         {
-            var frameBuffer = m_lastFrameBuffer;
-            if (frameBuffer == null || frameBuffer.Length == 0)
-            {
-                Logger.Instance.Warn("No frame available for screenshot.");
-                return;
-            }
-
-            const int expectedSize = SmsVdp.FrameWidth * SmsVdp.FrameHeight * 4;
-            if (frameBuffer.Length != expectedSize)
-            {
-                Logger.Instance.Warn($"Screenshot aborted; expected {expectedSize} bytes but got {frameBuffer.Length}.");
-                return;
-            }
-
-            var frameCopy = new byte[frameBuffer.Length];
-            Buffer.BlockCopy(frameBuffer, 0, frameCopy, 0, frameBuffer.Length);
-            TgaWriter.Write(info, frameCopy, SmsVdp.FrameWidth, SmsVdp.FrameHeight, 4);
+            m_emulator.SaveScreenshot(info);
         };
         command.Execute(null);
     }
@@ -457,42 +333,33 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable, ISnapshotH
     
     public void ResetDevice()
     {
-        lock (m_cpuStepLock)
-        {
-            m_cpu.Reset();
-            m_vdp.Reset();
-            m_memoryController.Reset();
-            m_psg.Reset();
-            m_clockSync.Reset();
-            m_lastCpuTStates = 0;
-        }
+        m_emulator.Reset();
         if (!string.IsNullOrEmpty(m_loadedRomPath))
             SnapshotHistory?.ResetForRom(m_loadedRomPath);
-        SetPaused(false);
         Logger.Instance.Info("CPU reset.");
     }
 
     public void DumpCpuHistory() =>
-        m_cpu.InstructionLogger.DumpToConsole();
+        m_machine.Cpu.InstructionLogger.DumpToConsole();
 
     public void ReportCpuClockTicks() =>
-        Console.WriteLine($"CPU clock ticks: {m_cpu.TStatesSinceCpuStart}");
+        Console.WriteLine($"CPU clock ticks: {m_machine.CpuTicks}");
 
     public void ReportFrameChecksum()
     {
-        if (!m_hasFrameChecksum)
+        if (!m_emulator.HasFrameChecksum)
         {
-            Console.WriteLine($"Frame checksum: n/a (no frame rendered yet). CPU ticks: {m_cpu.TStatesSinceCpuStart}");
+            Console.WriteLine($"Frame checksum: n/a (no frame rendered yet). CPU ticks: {m_emulator.CpuTicks}");
             return;
         }
 
-        Console.WriteLine($"Frame checksum: 0x{m_lastFrameChecksum:X8} @ CPU ticks {m_lastFrameTicks} (current {m_cpu.TStatesSinceCpuStart}).");
+        Console.WriteLine($"Frame checksum: 0x{m_emulator.LastFrameChecksum:X8} @ CPU ticks {m_emulator.LastFrameTicks} (current {m_emulator.CpuTicks}).");
     }
 
     public void TrackCpuHistory() => IsCpuHistoryTracked = !IsCpuHistoryTracked;
 
     public void SetInputActive(bool isActive) =>
-        m_joypad.SetInputEnabled(isActive);
+        m_machine.SetInputActive(isActive);
 
     private void OnSettingsPropertyChanged(object sender, PropertyChangedEventArgs e)
     {
@@ -510,7 +377,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable, ISnapshotH
                 OnPropertyChanged(nameof(IsNtscEnabled));
                 return;
             case nameof(Settings.IsCrtEmulationEnabled):
-                m_screen.FrameBuffer.IsCrt = Settings.IsCrtEmulationEnabled;
+                m_emulator.SetScreenEffectEnabled(Settings.IsCrtEmulationEnabled);
                 return;
             case nameof(Settings.IsBackgroundVisible):
             case nameof(Settings.AreSpritesVisible):
@@ -524,24 +391,23 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable, ISnapshotH
 
     private void ApplyLayerVisibility()
     {
-        m_vdp.IsBackgroundVisible = Settings.IsBackgroundVisible;
-        m_vdp.AreSpritesVisible = Settings.AreSpritesVisible;
+        m_machine.SetLayerVisibility(Settings.IsBackgroundVisible, Settings.AreSpritesVisible);
     }
 
     private void ApplySoundEnabledSetting() =>
-        m_audioSink.SetEnabled(Settings.IsSoundEnabled);
+        m_emulator.AudioDevice.SetEnabled(Settings.IsSoundEnabled);
 
     private void ApplyHardwareLowPassFilterSetting() =>
-        m_audioSink.SetLowPassFilterEnabled(Settings.IsHardwareLowPassFilterEnabled);
+        m_emulator.AudioDevice.SetLowPassFilterEnabled(Settings.IsHardwareLowPassFilterEnabled);
 
     private void ApplyVideoStandardSetting()
     {
-        m_vdp.SetIsPal(Settings.IsPalEnabled);
-        m_psg.SetCpuClockHz((int)GetEffectiveCpuHz());
-        m_clockSync.Resync();
+        var isPal = Settings.IsPalEnabled;
+        m_machine.SetVideoStandard(isPal);
+        UpdateMachineDescriptor();
+        m_machineRunner.ResyncClock();
         SnapshotHistory?.SetTicksPerSample((ulong)GetEffectiveCpuHz());
 
-        var isPal = Settings.IsPalEnabled;
         if (m_hasLoggedVideoStandard && m_lastLoggedIsPal == isPal)
             return;
         m_hasLoggedVideoStandard = true;
@@ -552,10 +418,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable, ISnapshotH
 
     private void ApplySoundChannelSettings()
     {
-        m_psg.SetChannelEnabled(1, IsSoundChannel1Enabled);
-        m_psg.SetChannelEnabled(2, IsSoundChannel2Enabled);
-        m_psg.SetChannelEnabled(3, IsSoundChannel3Enabled);
-        m_psg.SetChannelEnabled(4, IsSoundChannel4Enabled);
+        m_audioChannels.ApplyAll();
     }
 
     internal bool LoadRomFromFile(FileInfo romFile, bool addToMru)
@@ -568,21 +431,16 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable, ISnapshotH
             return false;
         }
 
-        var romData = ReadRomData(romFile, out var romName);
+        var (romName, romData) = RomLoader.ReadRomData(romFile, RomExtensions);
         if (romData == null || romData.Length == 0)
         {
             Logger.Instance.Warn($"Unable to load ROM '{romFile.FullName}': No valid ROM data found.");
             return false;
         }
 
-        StopCpu();
+        m_emulator.Stop();
 
-        var romDevice = new SmsRomDevice(romData);
-        var mapper = new SmsMapperDevice(m_memoryController, m_cpu.MainMemory);
-        m_cpu.Bus.Attach(mapper);
-        m_memoryController.SetBios(null);
-        m_memoryController.SetCartridge(romDevice, forceEnabled: false);
-        InitializePostRomState(romDevice);
+        m_machine.LoadRom(romData, romName);
 
         if (addToMru)
             Mru.Add(romFile);
@@ -592,211 +450,46 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable, ISnapshotH
         m_currentRomTitle = romName;
         WindowTitle = $"MasterG33k - {m_currentRomTitle}";
         SnapshotHistory?.ResetForRom(m_loadedRomPath);
-        StartCpuIfNeeded();
+        m_emulator.Start();
         LogRomInfo(romFile, romData);
         return true;
     }
 
-    private void InitializePostRomState(SmsRomDevice romDevice)
+    private void UpdateMachineDescriptor()
     {
-        if (romDevice == null)
-            throw new ArgumentNullException(nameof(romDevice));
-
-        lock (m_cpuStepLock)
+        var cpuHz = GetEffectiveCpuHz();
+        var videoHz = cpuHz / (SmsVdp.CyclesPerScanline * m_machine.Vdp.TotalScanlines);
+        var descriptor = new MachineDescriptor
         {
-            Array.Clear(m_cpu.MainMemory.Data, 0, m_cpu.MainMemory.Data.Length);
-            m_cpu.Reset();
-            m_vdp.ApplyPostBiosState();
-            m_memoryController.Reset();
-            m_psg.Reset();
-
-            // Post-BIOS slot state: BIOS disabled, cartridge/RAM/IO enabled, expansion/card disabled.
-            m_memoryController.WriteControl(0xA8);
-
-            // BIOS stores the last port $3E value at $C000; some titles read it back on boot.
-            m_cpu.MainMemory.Data[0xC000] = 0xA8;
-            m_cpu.Bus.Write8(0xFFFC, romDevice.Control);
-            m_cpu.Bus.Write8(0xFFFD, romDevice.Bank0);
-            m_cpu.Bus.Write8(0xFFFE, romDevice.Bank1);
-            m_cpu.Bus.Write8(0xFFFF, romDevice.Bank2);
-
-            m_cpu.Reg.PC = 0x0000;
-            m_cpu.Reg.SP = 0xDFF0;
-            m_cpu.Reg.AF = 0x0000;
-            m_cpu.Reg.BC = 0x0000;
-            m_cpu.Reg.DE = 0x0000;
-            m_cpu.Reg.HL = 0x0000;
-            m_cpu.Reg.IX = 0x0000;
-            m_cpu.Reg.IY = 0x0000;
-            m_cpu.Reg.IM = 1;
-            m_cpu.Reg.IFF1 = false;
-            m_cpu.Reg.IFF2 = false;
-
-            m_clockSync.Reset();
-            m_lastCpuTStates = 0;
-        }
-
-        SetPaused(false);
+            Name = "MasterG33k",
+            CpuHz = cpuHz,
+            VideoHz = videoHz,
+            AudioSampleRateHz = AudioSampleRateHz,
+            FrameWidth = SmsVdp.FrameWidth,
+            FrameHeight = SmsVdp.FrameHeight
+        };
+        m_machine.UpdateDescriptor(descriptor);
     }
 
-    private void SetPaused(bool isPaused)
+    private MachineDescriptor CreateMachineDescriptor() => new()
     {
-        if (m_isPaused == isPaused)
-            return;
-
-        m_isPaused = isPaused;
-        m_screen.FrameBuffer.IsPaused = isPaused;
-    }
+        Name = "MasterG33k",
+        CpuHz = GetEffectiveCpuHz(),
+        VideoHz = 0,
+        AudioSampleRateHz = AudioSampleRateHz,
+        FrameWidth = SmsVdp.FrameWidth,
+        FrameHeight = SmsVdp.FrameHeight
+    };
 
     public void Dispose()
     {
-        m_recordingSession?.Dispose();
-        m_recordingSession = null;
-        m_audioSink.FlushCapture();
-        m_audioSink.SetCaptureSink(null);
-        m_recordingAudioSink = null;
-        StopRecordingIndicator();
-        StopCpu();
-        m_joypad.Dispose();
-        m_audioSink.Dispose();
-        m_screen.Dispose();
+        m_emulator.Dispose();
+        m_emulator.Stop();
+        m_machineRunner.Dispose();
+        m_machine.Joypad.Dispose();
+        m_emulator.AudioDevice.Dispose();
         Settings.MruFiles = Mru.AsString();
         Settings.PropertyChanged -= OnSettingsPropertyChanged;
-    }
-
-    private void StartCpuIfNeeded()
-    {
-        if (m_cpuThread != null)
-            return;
-
-        m_shutdownRequested = false;
-        m_clockSync.Reset();
-        m_lastCpuTStates = m_cpu.TStatesSinceCpuStart;
-        m_audioSink.Start();
-        m_cpuThread = new Thread(RunCpuLoop)
-        {
-            Name = "MasterG33k CPU",
-            IsBackground = true
-        };
-        m_cpuThread.Start();
-    }
-
-    private void StopCpu()
-    {
-        if (m_cpuThread == null)
-            return;
-
-        m_shutdownRequested = true;
-        m_cpuPauseEvent.Set();
-        if (!m_cpuThread.Join(TimeSpan.FromSeconds(2)))
-            m_cpuThread.Interrupt();
-        m_cpuThread = null;
-    }
-
-    private void RunCpuLoop()
-    {
-        try
-        {
-            while (!m_shutdownRequested)
-            {
-                if (!m_cpuPauseEvent.IsSet)
-                {
-                    m_cpuPauseEvent.Wait(TimeSpan.FromMilliseconds(PauseRefreshIntervalMs));
-                    RefreshPausedFrame();
-                    continue;
-                }
-
-                m_clockSync.SyncWithRealTime();
-                lock (m_cpuStepLock)
-                {
-                    m_cpu.Step();
-                    var current = m_cpu.TStatesSinceCpuStart;
-                    var delta = current - m_lastCpuTStates;
-                    if (delta > 0)
-                    {
-                        m_vdp.AdvanceCycles(delta);
-                        m_psg.AdvanceT(delta);
-                    }
-                    m_lastCpuTStates = current;
-                    if (m_vdp.TryConsumeInterrupt())
-                        m_cpu.RequestInterrupt();
-                }
-            }
-        }
-        catch (ThreadInterruptedException)
-        {
-            // Expected during shutdown.
-        }
-        catch (Exception e)
-        {
-            Logger.Instance.Error($"Stopping CPU loop due to exception: {e.Message}");
-        }
-    }
-
-    private void ToggleCpuPause()
-    {
-        bool isPaused;
-        byte[] frameBufferCopy;
-
-        lock (m_cpuStepLock)
-        {
-            m_isCpuPaused = !m_isCpuPaused;
-            isPaused = m_isCpuPaused;
-            if (m_isCpuPaused)
-            {
-                m_cpuPauseEvent.Reset();
-            }
-            else
-            {
-                m_clockSync.Resync();
-                m_cpuPauseEvent.Set();
-            }
-
-            frameBufferCopy = m_lastFrameBuffer;
-        }
-
-        SetPaused(isPaused);
-        if (frameBufferCopy == null)
-            return;
-        m_screen.Update(frameBufferCopy);
-        DisplayUpdated?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void OnFrameRendered(object sender, byte[] frameBuffer)
-    {
-        if (frameBuffer == null || frameBuffer.Length == 0)
-            return;
-
-        var bufferCopy = new byte[frameBuffer.Length];
-        Buffer.BlockCopy(frameBuffer, 0, bufferCopy, 0, frameBuffer.Length);
-        m_lastFrameBuffer = bufferCopy;
-        m_lastFrameChecksum = ComputeFrameChecksum(frameBuffer);
-        m_lastFrameTicks = m_cpu.TStatesSinceCpuStart;
-        m_hasFrameChecksum = true;
-        m_screen.Update(frameBuffer);
-        m_recordingSession?.CaptureFrame();
-        SnapshotHistory?.OnFrameRendered((ulong)m_cpu.TStatesSinceCpuStart);
-        DisplayUpdated?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void RefreshPausedFrame()
-    {
-        if (!m_isPaused)
-            return;
-
-        var frameBuffer = m_lastFrameBuffer;
-        if (frameBuffer == null)
-            return;
-
-        lock (m_cpuStepLock)
-        {
-            if (!m_isPaused)
-                return;
-
-            m_screen.Update(frameBuffer);
-        }
-
-        DisplayUpdated?.Invoke(this, EventArgs.Empty);
     }
 
     // Master System CPU clock; we always render 256x192.
@@ -804,147 +497,10 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable, ISnapshotH
         Settings.IsPalEnabled ? 3_546_895 : 3_579_545;
 
     private double GetVideoFrameRate() =>
-        GetEffectiveCpuHz() / (SmsVdp.CyclesPerScanline * m_vdp.TotalScanlines);
-
-    private static uint ComputeFrameChecksum(byte[] frameBuffer)
-    {
-        const uint offsetBasis = 2166136261;
-        const uint prime = 16777619;
-        var hash = offsetBasis;
-        foreach (var b in frameBuffer)
-        {
-            hash ^= b;
-            hash *= prime;
-        }
-
-        return hash;
-    }
+        GetEffectiveCpuHz() / (SmsVdp.CyclesPerScanline * m_machine.Vdp.TotalScanlines);
 
     private static string SanitizeFileName(string input) =>
         string.IsNullOrWhiteSpace(input) ? "MasterG33k" : input.ToSafeFileName();
 
-    private void StartRecordingIndicator()
-    {
-        m_recordingIndicatorTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
-        m_recordingIndicatorTimer.Stop();
-        m_recordingIndicatorTimer.Tick -= OnRecordingIndicatorTick;
-        m_recordingIndicatorTimer.Tick += OnRecordingIndicatorTick;
-        IsRecordingIndicatorOn = true;
-        m_recordingIndicatorTimer.Start();
-    }
-
-    private void StopRecordingIndicator()
-    {
-        if (m_recordingIndicatorTimer != null)
-        {
-            m_recordingIndicatorTimer.Tick -= OnRecordingIndicatorTick;
-            m_recordingIndicatorTimer.Stop();
-        }
-
-        IsRecordingIndicatorOn = false;
-    }
-
-    private void OnRecordingIndicatorTick(object sender, EventArgs e)
-    {
-        if (!IsRecording)
-        {
-            OnPropertyChanged(nameof(IsRecording));
-            StopRecordingIndicator();
-            return;
-        }
-
-        IsRecordingIndicatorOn = !IsRecordingIndicatorOn;
-    }
-
-    private sealed class RecordingAudioSink : IAudioSampleSink
-    {
-        private readonly RecordingSession m_session;
-
-        public RecordingAudioSink(RecordingSession session)
-        {
-            m_session = session ?? throw new ArgumentNullException(nameof(session));
-        }
-
-        public void OnSamples(ReadOnlySpan<short> samples, int sampleRate) =>
-            m_session.OnAudioSamples(samples, sampleRate);
-    }
-
-    bool ISnapshotHost.IsRunning => m_cpuThread != null;
-
-    bool ISnapshotHost.HasLoadedCartridge => m_memoryController?.Cartridge != null;
-
-    ulong ISnapshotHost.CpuClockTicks => (ulong)(m_cpu?.TStatesSinceCpuStart ?? 0);
-
-    int ISnapshotHost.GetStateSize() =>
-        SmsSnapshot.GetStateSize(m_cpu, m_cpu.MainMemory, m_memoryController, m_portDevice, m_vdp, m_psg);
-
-    void ISnapshotHost.CaptureState(MachineState state, Span<byte> frameBuffer)
-    {
-        if (state == null)
-            throw new ArgumentNullException(nameof(state));
-
-        lock (m_cpuStepLock)
-        {
-            SmsSnapshot.Save(state, m_cpu, m_cpu.MainMemory, m_memoryController, m_portDevice, m_vdp, m_psg);
-            m_vdp.CopyFrameBuffer(frameBuffer);
-        }
-    }
-
-    void ISnapshotHost.LoadState(MachineState state) =>
-        ApplySnapshotState(state);
-
-    private void RefreshDisplayFromVdp()
-    {
-        var frameBuffer = new byte[SmsVdp.FrameWidth * SmsVdp.FrameHeight * 4];
-        m_vdp.CopyFrameBuffer(frameBuffer);
-        m_lastFrameBuffer = frameBuffer;
-        m_lastFrameChecksum = ComputeFrameChecksum(frameBuffer);
-        m_lastFrameTicks = m_cpu.TStatesSinceCpuStart;
-        m_hasFrameChecksum = true;
-        m_screen.Update(frameBuffer);
-        DisplayUpdated?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void ApplySnapshotState(MachineState state)
-    {
-        if (state == null)
-            throw new ArgumentNullException(nameof(state));
-
-        lock (m_cpuStepLock)
-            SmsSnapshot.Load(state, m_cpu, m_cpu.MainMemory, m_memoryController, m_portDevice, m_vdp, m_psg);
-
-        RefreshDisplayFromVdp();
-        m_clockSync.Resync();
-        m_lastCpuTStates = m_cpu.TStatesSinceCpuStart;
-    }
-
-    private static byte[] ReadRomData(FileInfo romFile, out string romName)
-    {
-        romName = romFile?.Name;
-        if (romFile == null)
-            return null;
-
-        if (!romFile.Extension.Equals(".zip", StringComparison.OrdinalIgnoreCase))
-        {
-            romName = Path.GetFileNameWithoutExtension(romName);
-            return romFile.ReadAllBytes();
-        }
-
-        using var archive = ZipFile.OpenRead(romFile.FullName);
-        foreach (var entry in archive.Entries)
-        {
-            if (!entry.Name.EndsWith(".sms", StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            var buffer = new byte[(int)entry.Length];
-            using var stream = entry.Open();
-            stream.ReadExactly(buffer.AsSpan());
-
-            romName = Path.GetFileNameWithoutExtension(entry.Name);
-            return buffer;
-        }
-
-        return null;
-    }
-
 }
+

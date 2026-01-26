@@ -72,6 +72,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\DTC.Z80\DTC.Z80.csproj" />
+      <ProjectReference Include="..\DTC.Emulation\DTC.Emulation.csproj" />
     </ItemGroup>
 
     <ItemGroup>

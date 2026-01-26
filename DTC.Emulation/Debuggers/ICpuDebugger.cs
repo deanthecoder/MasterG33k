@@ -8,16 +8,15 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
-namespace DTC.Z80;
+namespace DTC.Emulation.Debuggers;
 
 /// <summary>
-/// Represents a port-mapped device.
+/// Receives CPU debugging callbacks before and after instructions.
 /// </summary>
-/// <remarks>
-/// Implementations translate 8-bit I/O port accesses to device behavior.
-/// </remarks>
-public interface IPortDevice
+public interface ICpuDebugger
 {
-    byte Read8(ushort portAddress);
-    void Write8(ushort portAddress, byte value);
+    void BeforeInstruction(CpuBase cpu, ushort opcodeAddress, byte opcode);
+    void AfterStep(CpuBase cpu);
+    void OnMemoryRead(CpuBase cpu, ushort address, byte value);
+    void OnMemoryWrite(CpuBase cpu, ushort address, byte value);
 }

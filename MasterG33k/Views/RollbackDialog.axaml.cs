@@ -13,7 +13,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
-using DTC.Z80.Snapshot;
+using DTC.Emulation.Snapshot;
 
 namespace MasterG33k.Views;
 
@@ -104,3 +104,4 @@ public partial class RollbackDialog : UserControl
         m_isSnapshottingPaused = false;
     }
 }
+

@@ -1,19 +1,22 @@
 // Code authored by Dean Edis (DeanTheCoder).
 // Anyone is free to copy, modify, use, compile, or distribute this software,
-// either in source code form or as a compiled binary, for any
-// purpose.
+// either in source code form or as a compiled binary, for any purpose.
 //
 // If you modify the code, please retain this copyright header,
 // and consider contributing back to the repository or letting us know
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
-namespace DTC.Z80.Debuggers;
 
-public interface ICpuDebugger
+namespace DTC.Emulation;
+
+/// <summary>
+/// Exposes frame buffer output for an emulated video device.
+/// </summary>
+public interface IVideoSource
 {
-    void BeforeInstruction(Cpu cpu, ushort opcodeAddress, byte opcode);
-    void AfterStep(Cpu cpu);
-    void OnMemoryRead(Cpu cpu, ushort address, byte value);
-    void OnMemoryWrite(Cpu cpu, ushort address, byte value);
+    int FrameWidth { get; }
+    int FrameHeight { get; }
+    event EventHandler<byte[]> FrameRendered;
+    void CopyFrameBuffer(Span<byte> frameBuffer);
 }

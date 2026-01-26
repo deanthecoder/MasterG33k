@@ -10,7 +10,7 @@
 
 using System.Buffers.Binary;
 
-namespace DTC.Z80.Snapshot;
+namespace DTC.Emulation.Snapshot;
 
 /// <summary>
 /// Reads primitive values from a fixed snapshot buffer.
@@ -33,60 +33,50 @@ public struct StateReader
         return m_buffer[Offset++];
     }
 
-    public bool ReadBool() =>
-        ReadByte() != 0;
+    public bool ReadBool() => ReadByte() != 0;
 
     public ushort ReadUInt16()
     {
         Ensure(2);
-        var value = BinaryPrimitives.ReadUInt16LittleEndian(m_buffer.AsSpan(Offset, 2));
+        var result = BinaryPrimitives.ReadUInt16LittleEndian(m_buffer.AsSpan(Offset, 2));
         Offset += 2;
-        return value;
+        return result;
     }
 
     public int ReadInt32()
     {
         Ensure(4);
-        var value = BinaryPrimitives.ReadInt32LittleEndian(m_buffer.AsSpan(Offset, 4));
+        var result = BinaryPrimitives.ReadInt32LittleEndian(m_buffer.AsSpan(Offset, 4));
         Offset += 4;
-        return value;
+        return result;
     }
 
     public uint ReadUInt32()
     {
         Ensure(4);
-        var value = BinaryPrimitives.ReadUInt32LittleEndian(m_buffer.AsSpan(Offset, 4));
+        var result = BinaryPrimitives.ReadUInt32LittleEndian(m_buffer.AsSpan(Offset, 4));
         Offset += 4;
-        return value;
+        return result;
     }
 
     public long ReadInt64()
     {
         Ensure(8);
-        var value = BinaryPrimitives.ReadInt64LittleEndian(m_buffer.AsSpan(Offset, 8));
+        var result = BinaryPrimitives.ReadInt64LittleEndian(m_buffer.AsSpan(Offset, 8));
         Offset += 8;
-        return value;
+        return result;
     }
 
     public ulong ReadUInt64()
     {
         Ensure(8);
-        var value = BinaryPrimitives.ReadUInt64LittleEndian(m_buffer.AsSpan(Offset, 8));
+        var result = BinaryPrimitives.ReadUInt64LittleEndian(m_buffer.AsSpan(Offset, 8));
         Offset += 8;
-        return value;
+        return result;
     }
 
     public double ReadDouble() =>
         BitConverter.Int64BitsToDouble(ReadInt64());
-
-    public void ReadBytes(byte[] destination)
-    {
-        if (destination == null)
-            throw new ArgumentNullException(nameof(destination));
-        Ensure(destination.Length);
-        Buffer.BlockCopy(m_buffer, Offset, destination, 0, destination.Length);
-        Offset += destination.Length;
-    }
 
     public void ReadBytes(Span<byte> destination)
     {

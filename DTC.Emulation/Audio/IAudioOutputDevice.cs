@@ -8,12 +8,18 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
-namespace DTC.Z80.HostDevices;
+namespace DTC.Emulation.Audio;
 
 /// <summary>
-/// Receives PCM samples for optional capture/recording.
+/// Provides audio output and optional capture for emulated machines.
 /// </summary>
-public interface IAudioSampleSink
+public interface IAudioOutputDevice : IDisposable
 {
-    void OnSamples(ReadOnlySpan<short> samples, int sampleRate);
+    int SampleRateHz { get; }
+
+    void Start();
+    void SetEnabled(bool isSoundEnabled);
+    void SetLowPassFilterEnabled(bool isEnabled);
+    void SetCaptureSink(IAudioSampleSink value);
+    void FlushCapture();
 }

@@ -8,7 +8,7 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
-namespace DTC.Z80.Snapshot;
+namespace DTC.Emulation.Snapshot;
 
 /// <summary>
 /// Holds a serialized snapshot of CPU and device state.
@@ -30,8 +30,8 @@ public sealed class MachineState
     public int Size => m_data.Length;
     public string RomPath { get; set; }
 
-    internal StateWriter CreateWriter() => new StateWriter(m_data);
-    internal StateReader CreateReader() => new StateReader(m_data);
+    public StateWriter CreateWriter() => new StateWriter(m_data);
+    public StateReader CreateReader() => new StateReader(m_data);
 
     internal byte[] GetBuffer() => m_data;
 

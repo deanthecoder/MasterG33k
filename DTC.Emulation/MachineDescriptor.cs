@@ -8,15 +8,17 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
-namespace DTC.Z80.Snapshot;
+namespace DTC.Emulation;
 
-public interface ISnapshotHost
+/// <summary>
+/// Default descriptor implementation for machine timing and display metadata.
+/// </summary>
+public sealed class MachineDescriptor : IMachineDescriptor
 {
-    bool IsRunning { get; }
-    bool HasLoadedCartridge { get; }
-    ulong CpuClockTicks { get; }
-
-    int GetStateSize();
-    void CaptureState(MachineState state, Span<byte> frameBuffer);
-    void LoadState(MachineState state);
+    public string Name { get; init; }
+    public double CpuHz { get; init; }
+    public double VideoHz { get; init; }
+    public int AudioSampleRateHz { get; init; }
+    public int FrameWidth { get; init; }
+    public int FrameHeight { get; init; }
 }

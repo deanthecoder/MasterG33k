@@ -7,21 +7,19 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
-using System.Diagnostics;
-using DTC.Z80.Debuggers;
+using DTC.Emulation;
+using DTC.Emulation.Snapshot;
 using DTC.Z80.Devices;
-using DTC.Z80.Snapshot;
 
 namespace DTC.Z80;
 
 /// <summary>
-/// Minimal Z80 CPU scaffold. Instruction execution is intentionally stubbed.
+/// Minimal Z80 CPU scaffold.
 /// </summary>
-public sealed class Cpu
+public sealed class Cpu : CpuBase
 {
     private bool m_interruptPending;
     private int m_eiDelay;
-    private readonly List<ICpuDebugger> m_debuggers = [];
     private bool m_nmiPending;
 
     public Registers Reg { get; }
@@ -32,8 +30,6 @@ public sealed class Cpu
 
     public bool IsHalted { get; set; }
 
-    public IReadOnlyCollection<ICpuDebugger> Debuggers => m_debuggers.AsReadOnly();
-
     public ushort CurrentInstructionAddress { get; private set; }
     
     // ReSharper disable InconsistentNaming
@@ -41,17 +37,15 @@ public sealed class Cpu
 
     // ReSharper restore InconsistentNaming
     public Cpu(Bus bus)
+        : base(bus)
     {
-        Bus = bus ?? throw new ArgumentNullException(nameof(bus));
-        MainMemory = Bus.MainMemory;
+        MainMemory = bus?.MainMemory ?? throw new ArgumentNullException(nameof(bus));
         TheRegisters = new Registers();
         Reg = TheRegisters;
         Alu = new Alu(TheRegisters);
     }
 
-    public Bus Bus { get; }
-
-    public void Reset()
+    public override void Reset()
     {
         TheRegisters.Clear();
         IsHalted = false;
@@ -59,15 +53,7 @@ public sealed class Cpu
         m_eiDelay = 0;
     }
 
-    public void AddDebugger(ICpuDebugger debugger)
-    {
-        if (debugger == null)
-            throw new ArgumentNullException(nameof(debugger));
-
-        m_debuggers.Add(debugger);
-    }
-
-    public void Step()
+    public override void Step()
     {
         if (IsHalted)
         {
@@ -198,7 +184,7 @@ public sealed class Cpu
     public ushort Fetch16() =>
         (ushort)(Fetch8() | (Fetch8() << 8));
 
-    public byte Read8(ushort address)
+    public override byte Read8(ushort address)
     {
         var value = Bus.Read8(address);
         InternalWait(3);
@@ -206,7 +192,7 @@ public sealed class Cpu
         return value;
     }
 
-    public void Write8(ushort address, byte value)
+    public override void Write8(ushort address, byte value)
     {
         Bus.Write8(address, value);
         InternalWait(3);
@@ -231,46 +217,6 @@ public sealed class Cpu
         Write8((ushort)(Reg.SP - 1), (byte)(Reg.PC >> 8));
         Write8((ushort)(Reg.SP - 2), (byte)(Reg.PC & 0xFF));
         Reg.SP -= 2;
-    }
-
-    [Conditional("DEBUG")]
-    private void NotifyBeforeInstruction(ushort opcodeAddress, byte opcode)
-    {
-        if (m_debuggers.Count == 0)
-            return;
-
-        foreach (var debugger in m_debuggers)
-            debugger.BeforeInstruction(this, opcodeAddress, opcode);
-    }
-
-    [Conditional("DEBUG")]
-    private void NotifyAfterStep()
-    {
-        if (m_debuggers.Count == 0)
-            return;
-
-        foreach (var debugger in m_debuggers)
-            debugger.AfterStep(this);
-    }
-
-    [Conditional("DEBUG")]
-    private void NotifyMemoryRead(ushort address, byte value)
-    {
-        if (m_debuggers.Count == 0)
-            return;
-
-        foreach (var debugger in m_debuggers)
-            debugger.OnMemoryRead(this, address, value);
-    }
-
-    [Conditional("DEBUG")]
-    private void NotifyMemoryWrite(ushort address, byte value)
-    {
-        if (m_debuggers.Count == 0)
-            return;
-
-        foreach (var debugger in m_debuggers)
-            debugger.OnMemoryWrite(this, address, value);
     }
 
     internal int GetStateSize() =>
@@ -363,3 +309,4 @@ public sealed class Cpu
         CurrentInstructionAddress = reader.ReadUInt16();
     }
 }
+

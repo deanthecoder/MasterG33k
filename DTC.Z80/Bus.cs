@@ -7,6 +7,7 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
+using DTC.Emulation;
 using DTC.Z80.Devices;
 
 namespace DTC.Z80;
@@ -14,45 +15,22 @@ namespace DTC.Z80;
 /// <summary>
 /// Minimal Z80 bus with device mapping for memory and ports.
 /// </summary>
-public sealed class Bus
+public sealed class Bus : BusBase
 {
-    private readonly IMemDevice[] m_devices = new IMemDevice[0x10000];
     private readonly IPortDevice m_portDevice;
 
-    public Memory MainMemory { get; }
-
-    public Bus(Memory memory, IPortDevice portDevice = null)
+    public Bus(Memory memory, IPortDevice portDevice = null, int byteSize = 0x10000)
+        : base(memory, byteSize)
     {
-        MainMemory = memory ?? throw new ArgumentNullException(nameof(memory));
         m_portDevice = portDevice ?? DefaultPortDevice.Instance;
-        Attach(MainMemory);
-    }
-    
-    public void Attach(IMemDevice device)
-    {
-        if (device == null)
-            throw new ArgumentNullException(nameof(device));
-
-        for (var addr = (int)device.FromAddr; addr <= device.ToAddr; addr++)
-            m_devices[addr] = device;
+        MainMemory = memory ?? throw new ArgumentNullException(nameof(memory));
     }
 
-    public byte Read8(ushort address) =>
-        m_devices[address]?.Read8(address) ?? 0xFF;
+    public new Memory MainMemory { get; }
 
-    public void Write8(ushort address, byte value) =>
-        m_devices[address]?.Write8(address, value);
-
-    public ushort Read16(ushort address)
-    {
-        var lo = Read8(address);
-        var hi = Read8((ushort)(address + 1));
-        return (ushort)(hi << 8 | lo);
-    }
-
-    public byte ReadPort(ushort portAddress) =>
+    public override byte ReadPort(ushort portAddress) =>
         m_portDevice?.Read8(portAddress) ?? 0xFF;
 
-    public void WritePort(ushort portAddress, byte value) =>
+    public override void WritePort(ushort portAddress, byte value) =>
         m_portDevice?.Write8(portAddress, value);
 }

@@ -9,9 +9,14 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 using DTC.Core;
+using DTC.Emulation;
+using DTC.Emulation.Debuggers;
 
 namespace DTC.Z80.Debuggers;
 
+/// <summary>
+/// Debugger that scans RAM for incrementing counters and reports candidate addresses.
+/// </summary>
 public sealed class IncrementingCounterDebugger : CpuDebuggerBase
 {
     private readonly Dictionary<ushort, CandidateState> m_states = new();
@@ -45,11 +50,15 @@ public sealed class IncrementingCounterDebugger : CpuDebuggerBase
         m_targetValue = targetValue;
     }
 
-    public override void AfterStep(Cpu cpu)
+    public override void AfterStep(CpuBase cpu)
     {
+        var z80 = cpu as Cpu;
+        if (z80 == null)
+            return;
+
         if (!m_isInitialized)
         {
-            Initialize(cpu);
+            Initialize(z80);
             return;
         }
 
@@ -58,22 +67,27 @@ public sealed class IncrementingCounterDebugger : CpuDebuggerBase
             if (m_reportedEmpty || HasPendingCandidatesWaitingToArm())
                 return;
             const string message = "[Counter Detector] No incrementing candidates remain.";
-            cpu.InstructionLogger.Write(() => message);
+            z80.InstructionLogger.Write(() => message);
             Logger.Instance.Info(message);
             m_reportedEmpty = true;
             return;
         }
 
-        ScanArmedCandidates(cpu);
+        ScanArmedCandidates(z80);
 
         if (!m_reportedSingleCandidate && m_candidates.Count == 1)
-            AnnounceSingleCandidate(cpu);
+            AnnounceSingleCandidate(z80);
     }
 
-    public override void OnMemoryWrite(Cpu cpu, ushort address, byte value)
+    public override void OnMemoryWrite(CpuBase cpu, ushort address, byte value)
     {
         if (!m_isInitialized)
             return;
+
+        var z80 = cpu as Cpu;
+        if (z80 == null)
+            return;
+
         if (!m_states.TryGetValue(address, out var state))
             return;
 
@@ -86,7 +100,7 @@ public sealed class IncrementingCounterDebugger : CpuDebuggerBase
                 m_candidates.Add(address);
                 m_reportedEmpty = false;
                 if (!m_reportedSingleCandidate && m_candidates.Count == 1)
-                    AnnounceSingleCandidate(cpu);
+                    AnnounceSingleCandidate(z80);
             }
             m_states[address] = state;
             return;
@@ -103,7 +117,7 @@ public sealed class IncrementingCounterDebugger : CpuDebuggerBase
             return;
         }
 
-        ProcessValueChange(cpu, address, previous, value, ref state);
+        ProcessValueChange(z80, address, previous, value, ref state);
         m_states[address] = state;
     }
 

@@ -13,9 +13,8 @@ using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using DTC.Core.ViewModels;
-using DTC.Z80.Devices;
 
-namespace DTC.Z80.Snapshot;
+namespace DTC.Emulation.Snapshot;
 
 /// <summary>
 /// Periodically snapshots machine state to support time travel.
@@ -42,8 +41,8 @@ public sealed class SnapshotHistory : ViewModelBase
     public SnapshotHistory(ISnapshotHost host, ulong ticksPerSample)
     {
         m_host = host ?? throw new ArgumentNullException(nameof(host));
-        m_frameWidth = SmsVdp.FrameWidth;
-        m_frameHeight = SmsVdp.FrameHeight;
+        m_frameWidth = host.FrameWidth;
+        m_frameHeight = host.FrameHeight;
         SetTicksPerSample(ticksPerSample);
         var size = new PixelSize(m_frameWidth, m_frameHeight);
         ScreenPreview = new WriteableBitmap(size, new Vector(96, 96), PixelFormat.Rgba8888);

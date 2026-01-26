@@ -8,8 +8,12 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
-namespace DTC.Z80.Debuggers;
 
+namespace DTC.Emulation.Debuggers;
+
+/// <summary>
+/// Debugger that triggers a callback when the CPU reaches a specific opcode address.
+/// </summary>
 public sealed class PcBreakpointDebugger : CpuDebuggerBase
 {
     private readonly ushort m_breakAddress;
@@ -21,12 +25,11 @@ public sealed class PcBreakpointDebugger : CpuDebuggerBase
         m_action = action;
     }
 
-    public override void BeforeInstruction(Cpu cpu, ushort opcodeAddress, byte opcode)
+    public override void BeforeInstruction(CpuBase cpu, ushort opcodeAddress, byte opcode)
     {
         if (opcodeAddress != m_breakAddress)
             return;
 
-        cpu.InstructionLogger.Write(() => $"[Debugger] PC hit {opcodeAddress:X4} (opcode {opcode:X2}).");
         m_action?.Invoke();
     }
 }

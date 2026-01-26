@@ -11,7 +11,8 @@
 using System.Runtime.InteropServices;
 using DTC.Core;
 using DTC.Core.Extensions;
-using DTC.Z80.Snapshot;
+using DTC.Emulation;
+using DTC.Emulation.Snapshot;
 
 namespace DTC.Z80.Devices;
 
@@ -21,7 +22,7 @@ namespace DTC.Z80.Devices;
 /// <remarks>
 /// Handles VRAM/CRAM access, basic VBlank timing, and a simple background/sprite renderer.
 /// </remarks>
-public sealed class SmsVdp
+public sealed class SmsVdp : IVideoSource
 {
     public const int FrameWidth = 256;
     public const int FrameHeight = 192;
@@ -84,6 +85,10 @@ public sealed class SmsVdp
     public bool AreSpritesVisible { get; set; } = true;
 
     public int TotalScanlines { get; private set; } = NtscTotalScanlines;
+
+    int IVideoSource.FrameWidth => FrameWidth;
+
+    int IVideoSource.FrameHeight => FrameHeight;
 
     public void SetIsPal(bool isPal)
     {
@@ -828,3 +833,4 @@ public sealed class SmsVdp
         m_frameBuffer.AsSpan().CopyTo(destination);
     }
 }
+

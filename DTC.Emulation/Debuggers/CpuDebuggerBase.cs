@@ -8,23 +8,26 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
-namespace DTC.Z80.Debuggers;
+namespace DTC.Emulation.Debuggers;
 
+/// <summary>
+/// Base class for CPU debuggers with no-op implementations.
+/// </summary>
 public abstract class CpuDebuggerBase : ICpuDebugger
 {
-    public virtual void BeforeInstruction(Cpu cpu, ushort opcodeAddress, byte opcode)
+    public virtual void BeforeInstruction(CpuBase cpu, ushort opcodeAddress, byte opcode)
     {
     }
 
-    public virtual void AfterStep(Cpu cpu)
+    public virtual void AfterStep(CpuBase cpu)
     {
     }
 
-    public virtual void OnMemoryRead(Cpu cpu, ushort address, byte value)
+    public virtual void OnMemoryRead(CpuBase cpu, ushort address, byte value)
     {
     }
 
-    public virtual void OnMemoryWrite(Cpu cpu, ushort address, byte value)
+    public virtual void OnMemoryWrite(CpuBase cpu, ushort address, byte value)
     {
     }
 }

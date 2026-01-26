@@ -8,7 +8,9 @@
 // about your modifications. Your contributions are valued!
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
-using DTC.Z80.Snapshot;
+using DTC.Emulation.Snapshot;
+
+using DTC.Emulation;
 
 namespace DTC.Z80.Devices;
 
@@ -133,3 +135,4 @@ public sealed class SmsRomDevice : IMemDevice
     }
 
 }
+

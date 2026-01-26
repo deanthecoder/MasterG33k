@@ -10,7 +10,7 @@
 
 using System.Buffers.Binary;
 
-namespace DTC.Z80.Snapshot;
+namespace DTC.Emulation.Snapshot;
 
 /// <summary>
 /// Writes primitive values into a fixed snapshot buffer.

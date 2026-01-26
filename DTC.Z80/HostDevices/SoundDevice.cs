@@ -11,6 +11,7 @@
 
 using System.Buffers;
 using DTC.Core;
+using DTC.Emulation.Audio;
 using OpenTK.Audio.OpenAL;
 
 namespace DTC.Z80.HostDevices;
@@ -18,7 +19,7 @@ namespace DTC.Z80.HostDevices;
 /// <summary>
 /// A sound device to interface with the host machine's sound card.
 /// </summary>
-public class SoundDevice
+public class SoundDevice : IAudioOutputDevice
 {
     private const int BufferCount = 3;
     private const double VolumeRampMs = 100.0;
@@ -91,6 +92,8 @@ public class SoundDevice
         m_lowPassAlpha = ComputeLowPassAlpha(LowPassCutoffHz, m_sampleRate);
         m_highPassAlpha = ComputeHighPassAlpha(HighPassCutoffHz, m_sampleRate);
     }
+
+    public int SampleRateHz => m_sampleRate;
 
     public void SetCaptureSink(IAudioSampleSink value)
     {

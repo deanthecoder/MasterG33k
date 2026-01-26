@@ -10,8 +10,11 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 using System.Diagnostics;
 
-namespace DTC.Z80;
+namespace DTC.Emulation;
 
+/// <summary>
+/// Synchronizes emulated CPU ticks with wall-clock time.
+/// </summary>
 public class ClockSync
 {
     private readonly Stopwatch m_realTime;
