@@ -27,14 +27,14 @@ public sealed class SmsMachine : IMachine, IMachineSnapshotter
         if (audioSink == null)
             throw new ArgumentNullException(nameof(audioSink));
 
-        Vdp = new SmsVdp();
-        Joypad = new SmsJoypad();
-        MemoryController = new SmsMemoryController();
-        Psg = new SmsPsg(audioSink, (int)Descriptor.CpuHz, Descriptor.AudioSampleRateHz);
-        m_portDevice = new SmsPortDevice(Vdp, Joypad, MemoryController, psg: Psg);
-        Cpu = new Cpu(new Bus(0x10000, m_portDevice));
-        Cpu.Bus.Attach(new SmsRamMirrorDevice(Cpu.MainMemory));
-        Cpu.Bus.Attach(MemoryController);
+        var factory = new MachineFactory(descriptor, audioSink);
+        factory.Build();
+        Vdp = factory.Video;
+        Psg = factory.Audio;
+        Joypad = factory.Input;
+        MemoryController = factory.MemoryController;
+        Cpu = factory.Cpu;
+        m_portDevice = factory.PortDevice;
     }
 
     public IMachineDescriptor Descriptor { get; private set; }
