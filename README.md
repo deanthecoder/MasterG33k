@@ -58,6 +58,7 @@ Global key hooks translate the following keys into the SMS joypad:
 ## Highlights
 - **Z80 accuracy** – `DTC.Z80` implements the CPU, memory bus, disassembler, and core devices.
 - **Shared core utilities** – `DTC.Core` provides commands, extensions, converters, and Avalonia helpers shared across projects.
+- **Shared emulator host** – `DTC.Emulation` is the shared host repo used to write each emulator in this family.
 - **Avalonia UI shell** – `MasterG33k` hosts the emulator in a cross-platform desktop window.
 - **Validation suite** – `UnitTests` target the Z80 core and VDP renderer via NUnit to catch regressions.
 
