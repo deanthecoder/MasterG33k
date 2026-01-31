@@ -826,7 +826,7 @@ public sealed class SmsVdp : IVideoSource
         reader.ReadBytes(MemoryMarshal.AsBytes(m_spriteMaskPerLine.AsSpan()));
     }
 
-    public void CopyFrameBuffer(Span<byte> destination)
+    public void CopyToFrameBuffer(Span<byte> destination)
     {
         if (destination.Length != m_frameBuffer.Length)
             throw new ArgumentException("Frame buffer size mismatch.", nameof(destination));

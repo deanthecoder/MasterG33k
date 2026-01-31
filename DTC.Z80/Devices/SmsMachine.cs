@@ -159,7 +159,7 @@ public sealed class SmsMachine : IMachine, IMachineSnapshotter
         if (state == null)
             throw new ArgumentNullException(nameof(state));
         SmsSnapshot.Save(state, Cpu, Cpu.MainMemory, MemoryController, m_portDevice, Vdp, Psg);
-        Vdp.CopyFrameBuffer(frameBuffer);
+        Vdp.CopyToFrameBuffer(frameBuffer);
     }
 
     void IMachineSnapshotter.Load(MachineState state)
