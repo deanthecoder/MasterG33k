@@ -1,4 +1,5 @@
 [![Twitter URL](https://img.shields.io/twitter/url/https/twitter.com/deanthecoder.svg?style=social&label=Follow%20%40deanthecoder)](https://twitter.com/deanthecoder)
+[![GitHub Repo stars](https://img.shields.io/github/stars/deanthecoder/MasterG33k?style=social&label=Star)](https://github.com/deanthecoder/MasterG33k/stargazers)
 
 <p align="center">
   <img src="img/logo.png" alt="MasterG33k Logo">
